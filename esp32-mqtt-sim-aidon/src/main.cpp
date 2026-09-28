@@ -1,7 +1,5 @@
 /**
  * ESP32 Electrical Load Simulator
- * 
- * © Jentletron 2026
  */
 #include <Arduino.h>
 #include <WiFi.h>
