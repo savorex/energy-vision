@@ -1,4 +1,4 @@
-# Savorex Energy Monitoring
+# Savorex Energy Vision
 
 Reads an Aidon HAN electricity meter, publishes consumption over MQTT (TLS), and visualises it in a web app. Additional solar or wind production can be fed in with the included simulators.
 
@@ -69,8 +69,9 @@ Subscribes to the MQTT topics and visualises live consumption and production.
 
 | Topic | Direction | Payload | Interval |
 |---|---|---|---|
-| `aidon/<MAC>/kwh` | sender → broker | cumulative energy in kWh, e.g. `12345.678` | 15 s |
-| *(solar topic — TODO)* | simulator → broker | <!-- TODO: W? kWh? --> | <!-- TODO --> |
+| `xamkenergy/<MAC>/kwh` | device => broker | (cumulative energy) kWh | 15 s |
+| `solar` | simulator => broker | 0.00 - 8.50 kWh | 15s |
+| `solar` | simulator => broker | 0.00 - 15.00 kWh | 15s |
 
 ## Broker setup (mosquitto-tls/)
 
