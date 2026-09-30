@@ -1,22 +1,13 @@
--- [TABLES:]
---
--- CITIES
--- CAMPUSES
--- BUILDINGS
--- 
--- MEASUREMENTS
--- CALCULATIONS
---
 CREATE TABLE cities (
 	id INT AUTO_INCREMENT PRIMARY KEY,
 	name VARCHAR(100) NOT NULL
 );
 
 INSERT INTO cities (name) VALUES
-	('Mikkeli'),
-	('Kouvola'),
-	('Kotka'),
-	('Savonlinna');
+	('Blimore'),
+	('Glaphia'),
+	('Rudvine'),
+	('Osedon');
 
 CREATE TABLE campuses (
 	id INT AUTO_INCREMENT PRIMARY KEY,
@@ -26,10 +17,10 @@ CREATE TABLE campuses (
 );
 
 INSERT INTO campuses (city_id, name) VALUES
-	(1, 'Mikkelin kampus'),
-	(2, 'Kouvolan kampus'),
-	(3, 'Kotkan kampus'),
-	(4, 'Savonlinnan kampus');
+	(1, 'Blimoren kampus'),
+	(2, 'Glaphia kampus'),
+	(3, 'Rudvinen kampus'),
+	(4, 'Osedon kampus');
 
 CREATE TABLE buildings (
     id INT AUTO_INCREMENT PRIMARY KEY,

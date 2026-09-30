@@ -1,4 +1,4 @@
-# Savorex Energy Monitoring - ESP32 + MQTT + Web
+# Savorex Energy Monitoring
 
 Reads an Aidon HAN electricity meter, publishes consumption over MQTT (TLS), and visualises it in a web app. Additional solar or wind production can be fed in with the included simulators.
 
@@ -9,16 +9,21 @@ Aidon HAN meter - P1/UART──▶ ESP32 Sender ──MQTT/TLS :8883──▶ MQ
                           (no meter needed)            (simulated production data)
 ```
 
+## Integrations
+
+| Usecase | Description | Link |
+|---|---|---|
+| **XAMK Energy** | Campus comsumtion data Sankey diagram | https://hanmeter.duckdns.org/xamk-energy/
+
 ## Components
 
 | Component | What it is | Language / platform |
 |---|---|---|
-| **ESP32 MQTT Sender Aidon** | Real firmware: reads the HAN meter over UART, publishes kWh | C++ (Arduino/PlatformIO, ESP32) |
-| **ESP32MQTT Simulator Aidon** | Pretends to be the sender: publishes realistic consumption without a meter | WIP |
-| **ESP32MQTT Simulator Solar** | Pretends to be an inverter: publishes solar production | WIP |
-| **ESP32MQTT Simulator Wind** | Pretends to be an inverter: publishes solar production | WIP |
+| **ESP32 MQTT Sender Aidon** | Real firmware: reads the HAN meter over UART, publishes kWh | C++ (PlatformIO, ESP32) |
+| **ESP32MQTT Simulator Aidon** | Pretends to be the sender: publishes realistic consumption without a meter | C++ (PlatformIO, ESP32) |
+| **ESP32MQTT Simulator Solar** | Pretends to be an inverter: publishes solar production | C++ (PlatformIO, ESP32) |
+| **ESP32MQTT Simulator Wind** | Pretends to be an inverter: publishes solar production | C++ (PlatformIO, ESP32) |
 | **Savorex Energy (web)** | Dashboard that consumes the MQTT data | Powered via Node.js |
-| **mosquitto-tls/** | Broker deployment: Mosquitto with TLS on 8883 (fallback plaintext 1884) | Docker Compose |
 
 ## Repository layout
 
@@ -28,11 +33,8 @@ Aidon HAN meter - P1/UART──▶ ESP32 Sender ──MQTT/TLS :8883──▶ MQ
 ├── esp32-mqtt-sim-aidon/     ESP32 Aidon metering device simulator (WIP)
 ├── esp32-mqtt-sim-solar/     ESP32 PV device simulator (WIP)
 ├── energy-app/               Sankey Energy App
-├── mosquitto-tls/            Broker: docker-compose.yml, mosquitto.conf, gen-certs.sh
 └── nginx/                    Reverse proxy configs (OPTIONAL)
 ```
-
-*(Adjust the tree above to match the real repo.)*
 
 ## Components in detail
 
@@ -53,15 +55,15 @@ Firmware for an ESP32 wired to the Aidon meter's HAN/P1 port.
 
 ### 2. ESP32MQTT Simulator Aidon
 
-Publishes the same topic shape as the real sender, so you can develop the app side without hardware. <!-- TODO: exact usage: `python simulators/aidon_sim.py --broker host --interval 15`? -->
+Publishes the same topic shape as the real sender, so you can develop the app side without hardware.
 
 ### 3. ESP32MQTT Simulator Solar
 
-Publishes solar production data alongside consumption. <!-- TODO: topic name, payload format, day-curve behaviour -->
+Publishes solar production data alongside consumption.
 
-### 4. Energy App (web)
+### 4. Energy App (dashboard)
 
-Subscribes to the MQTT topics and visualises live consumption and production. <!-- TODO: how it connects to the broker (MQTT-over-websockets? backend relay?), how to run it, screenshot -->
+Subscribes to the MQTT topics and visualises live consumption and production.
 
 ## Topics
 
