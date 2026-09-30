@@ -28,6 +28,21 @@ Docker Compose manages both building and running the application.
 
 Note: you can set the name of the application yourself. Change `savorex` to your liking.
 
+## Setting up Nginx proxy:
+### 1. Write your site config
+`sudo nano /etc/nginx/sites-available/energy-app`
+
+### 2. Enable it = symlink into sites-enabled
+`sudo ln -s /etc/nginx/sites-available/energy-app /etc/nginx/sites-enabled/`
+
+### 3. Validate, then reload
+`sudo nginx -t`
+`sudo systemctl reload nginx`
+
+### To disable a site (file stays in sites-available)
+`sudo rm /etc/nginx/sites-enabled/energy-app`
+`sudo systemctl reload nginx`
+
 ### one-off: apply the new table to the running DB
 `sudo docker exec -i sankey_energy_app_mysql mysql -usankey -psankeypass sankeydb < db/init/02-chart-info.sql`
 

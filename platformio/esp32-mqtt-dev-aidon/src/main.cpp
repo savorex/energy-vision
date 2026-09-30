@@ -1,8 +1,7 @@
 /*
- * ESP32 Wroom32D HAN Serial -> MQTT (TLS)
+ * ESP32 32D HAN Serial -> MQTT (TLS)
  *
- * Ported from the Arduino Uno R4 sketch.
- * - WiFi: WiFi.h (ESP32)
+ * - WiFi: WiFi.h
  * - MQTT: PubSubClient over WiFiClientSecure (mbedTLS, port 8883).
  *   The broker is verified with its CA certificate; payloads go out
  *   as plaintext inside the encrypted connection.
@@ -38,11 +37,11 @@
  * 1-0:43.7.0(0000.000*kVAr)
  * 1-0:44.7.0(0023.240*kVAr)
  */
-#include <ArduinoOTA.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include "secrets.h"
+#include "ota.h"
+#include "conf.h"
 
 // ---- PIN DEFINITIONS ----
 constexpr int8_t PIN_DATA_RX = 16;
@@ -85,63 +84,6 @@ PubSubClient mqtt(tlsClient);
 
 char topic[32];
 char clientId[24];
-
-// esp32_p1meter.ino:
-// https://github.com/bartwo/esp32_p1meter/blob/master/esp32_p1meter.ino#L263
-void setupOTA()
-{
-  ArduinoOTA.setHostname(clientId);
-  ArduinoOTA.setPassword(OTA_PASSWORD);
-  ArduinoOTA.setPort(OTA_PORT);
-  ArduinoOTA
-    .onStart([]()
-    {
-      String type;
-      if (ArduinoOTA.getCommand() == U_FLASH)
-      {
-        type = "sketch";
-      }
-      else // U_SPIFFS
-      {
-        type = "filesystem";
-      }
-      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-      Serial.println("Start updating " + type);
-    })
-    .onEnd([]()
-    {
-      Serial.println("\nEnd");
-    })
-    .onProgress([](unsigned int progress, unsigned int total)
-    {
-      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    })
-    .onError([](ota_error_t error)
-    {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR)
-      {
-        Serial.println("Auth Failed");
-      }
-      else if (error == OTA_BEGIN_ERROR)
-      {
-        Serial.println("Begin Failed");
-      }
-      else if (error == OTA_CONNECT_ERROR)
-      {
-        Serial.println("Connect Failed");
-      }
-      else if (error == OTA_RECEIVE_ERROR)
-      {
-        Serial.println("Receive Failed");
-      }
-      else if (error == OTA_END_ERROR)
-      {
-        Serial.println("End Failed");
-      }
-    });
-  ArduinoOTA.begin();
-}
 
 // Non-blocking
 void connectToWifi()
@@ -281,7 +223,7 @@ void setup()
 
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setKeepAlive(20);
-  setupOTA();
+  otaInit(clientId);
   connectToWifi();
 } // setup
 
@@ -299,7 +241,7 @@ void loop()
     return;
   }
 
-  ArduinoOTA.handle();
+  otaLoop();
 
   if (!mqtt.connected())
   {
