@@ -1,0 +1,43 @@
+services:
+  app:
+    build: ./app
+    container_name: ${APP_NAME:-savorex-energy}-app
+    restart: unless-stopped
+    ports:
+      - "6767:80"
+    depends_on:
+      - api
+  api:
+    build: ./api
+    container_name: ${APP_NAME:-savorex-energy}-api
+    restart: unless-stopped
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      PORT: ${PORT}
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: mysql:8
+    container_name: ${APP_NAME:-savorex-energy}-db
+    restart: unless-stopped
+    environment:
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql-data:

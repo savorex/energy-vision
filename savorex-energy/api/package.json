@@ -1,0 +1,9 @@
+{
+  "name": "savorex-energy-api",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "express": "^5.2.0",
+    "mysql2": "^3.24.0"
+  }
+}

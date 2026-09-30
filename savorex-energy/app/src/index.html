@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="fi">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>XAMK Energy</title>
+  <link rel="shortcut icon" href="img/xamk_energy_logo_128.png" type="image/x-icon">
+
+  <script type="text/javascript" src="d3.js"></script>
+  <script type="text/javascript" src="d3-sankey.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: sans-serif;
+      min-height: 100vh;
+      max-width: 100vw;
+      overflow-x: hidden;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      margin: 2rem;
+      background: #0f172a;
+      color: #e6e9f2;
+    }
+
+    a {
+      color: azure;
+    }
+
+    img {
+      width: 160px;
+      max-height: 160px;
+    }
+
+    header {
+      position: fixed;
+      width: 100%;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    svg {
+      width: 100vw;
+      height: auto;
+    }
+
+    text {
+      fill: #e2e8f0;
+      font-size: 12px;
+    }
+
+    section.content {
+      width: 100%;
+    }
+
+    :root {
+      --bg: #1f2a44;
+      --track: #3b4666;
+      --fill-a: #4a5fc4;
+      --fill-b: #7d8fe8;
+      --handle: #e8ecf7;
+      --accent: #8b7ff0;
+      --accent-hover: #9d93f5;
+      --text: #e8ecf7;
+      --muted: #aab4d0;
+      --input-bg: #2a3654;
+      --input-border: #46527a;
+    }
+
+    /* ---- Main panel ---- */
+    .time-panel {
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 18px 22px 20px;
+      width: 100%;
+      max-width: 980px;
+      display: flex;
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .time-panel-main {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      gap: 18px;
+    }
+
+    .panel-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .slider-row {
+      width: calc(100% - 112px);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .slider-wrap {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 6px 0;
+      position: relative;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .slider-track {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--track);
+      position: relative;
+      cursor: pointer;
+    }
+
+    .slider-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--fill-a), var(--fill-b));
+    }
+
+    .slider-handle {
+      position: absolute;
+      top: 50%;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--handle);
+      border: 2px solid var(--fill-a);
+      transform: translate(-50%, -50%);
+      cursor: grab;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      transition: box-shadow 0.15s;
+    }
+
+    .slider-handle:hover,
+    .slider-handle.dragging {
+      box-shadow: 0 0 0 4px rgba(125, 143, 232, 0.25);
+      cursor: grabbing;
+    }
+
+    .slider-tick-labels {
+      position: relative;
+      height: 18px;
+      margin-top: 8px;
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    .slider-tick-labels span {
+      position: absolute;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+
+    /* ---- Date fields ---- */
+    .date-fields {
+      display: flex;
+      gap: 14px;
+      align-items: flex-end;
+    }
+
+    .date-field {
+      display: flex;
+      flex-direction: row;
+      gap: 6px;
+    }
+
+    .date-field label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .date-field input[type="date"] {
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      min-width: 148px;
+      outline: none;
+      color-scheme: dark;
+    }
+
+    .date-field input[type="date"]:focus {
+      border-color: var(--accent);
+    }
+
+    /* ---- Year selector (scrollable) ---- */
+    .year-selector {
+      width: 20%;
+      flex: 0 0 92px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 12px;
+      overflow-y: auto;
+      max-height: 64px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent) transparent;
+      align-self: center;
+    }
+
+    .year-selector::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .year-selector::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .year-selector::-webkit-scrollbar-thumb {
+      background: var(--accent);
+      border-radius: 999px;
+    }
+
+    .year-btn {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 0;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .year-btn:hover {
+      background: rgba(139, 127, 240, 0.15);
+      color: var(--text);
+    }
+
+    .year-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    /* ---- Small screens ---- */
+    @media (max-width: 720px) {
+      .time-panel {
+        flex-direction: column;
+      }
+
+      .year-selector {
+        flex: none;
+        max-height: 88px;
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        width: 75%;
+        align-self: stretch;
+      }
+
+      .year-btn {
+        flex: 1 0 auto;
+        padding: 8px 18px;
+      }
+    }
+
+    .dual-range-date-slider {
+      background-color: #27364e;
+      border-radius: 16px;
+      padding: 8px 24px;
+      position: relative;
+    }
+
+    .dual-range-date-slider .wrapper {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 30px;
+    }
+
+    .slider-wrapper {
+      width: 70%;
+    }
+
+    .slider {
+      position: relative;
+      height: 80px;
+    }
+
+    canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      opacity: 0.25;
+    }
+
+    .track {
+      position: absolute;
+      height: 10px;
+      width: 100%;
+      background: #1e293b;
+      top: 50%;
+      transform: translateY(-50%);
+      border-radius: 10px;
+    }
+
+    .range {
+      position: absolute;
+      height: calc(18px + 2vh);
+      background: linear-gradient(90deg, #265c8f, #15447a);
+      top: 50%;
+      transform: translateY(-50%);
+      border-radius: 10px;
+      cursor: grab;
+      z-index: 2;
+    }
+
+    input[type="range"] {
+      position: absolute;
+      width: 100%;
+      height: 80px;
+      pointer-events: none;
+      appearance: none;
+      background: none;
+      z-index: 3;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      pointer-events: auto;
+      appearance: none;
+      width: 26px;
+      height: 26px;
+      background: #fdb92a;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: #fdb92a;
+      color: #022c22;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      transform: translate(-50%, 64px);
+      opacity: 0;
+    }
+
+    .tooltip.visible {
+      opacity: 1;
+    }
+
+    .date-inputs {
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+    }
+
+    input[type="date"],
+    input[type="time"] {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: white;
+      padding: 8px;
+      border-radius: 6px;
+    }
+
+    .segmented {
+      position: relative;
+      display: inline-flex;
+      background: #1a2742;
+      border-radius: 12px;
+      padding: 2px 4px;
+      gap: 4px;
+      user-select: none;
+    }
+
+    .seg-btn {
+      position: relative;
+      z-index: 2;
+      border: none;
+      background: transparent;
+      padding: 8px 14px;
+      cursor: pointer;
+      border-radius: 10px;
+      font-size: 14px;
+      color: white;
+    }
+
+    .seg-btn.active {
+      color: white;
+    }
+
+    .seq-slider {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      height: calc(100% - 8px);
+      width: 70px;
+      background: #595CA9;
+      border-radius: 10px;
+      transition: all 0.25s ease;
+      z-index: 1;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      align-items: flex-start;
+      justify-content: center;
+      margin: 0px auto;
+      max-width: 1100px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+      font-family: system-ui, sans-serif;
+    }
+
+    .control-group h3 {
+      margin: 0 0 8px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #e6e0e0;
+      text-align: center;
+    }
+
+    .control-group.info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 18px;
+      background: #242b3d;
+      border: 1px solid #313a52;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .control-group.info-cards {
+      position: absolute;
+      display: flex;
+      flex-wrap: wrap;
+      gap: inherit;
+      right: -3%;
+      bottom: 29%;
+      transform: scale(0.75);
+    }
+
+    .info-card {
+      position: relative;
+      flex: 1 1 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      padding: 8px 18px;
+      background: #1d2334;
+      border: 1px solid #2d3550;
+      border-radius: 12px;
+      overflow: hidden;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    /* purple accent bar on the left edge */
+    .info-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 14px;
+      bottom: 14px;
+      width: 3px;
+      border-radius: 3px;
+      background: linear-gradient(180deg, #8b7cf8, #6c5ce7);
+    }
+
+    .info-card:hover {
+      transform: translateY(-2px);
+      border-color: #4a4470;
+    }
+
+    .tyle {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #8d97b0;
+      text-align: right;
+    }
+
+    .val {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.1;
+      color: #f1f3f9;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* kWh sits under the number, aligned right */
+    .ctype {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #5d6880;
+      text-align: right;
+    }
+
+    /* ===== Date / measurement row ===== */
+    .filters {
+      flex-basis: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px 18px;
+      padding: 8px 16px;
+      background: #1d2334;
+      border: 1px solid #2d3550;
+      border-radius: 12px;
+    }
+
+    .filters label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #aab3c8;
+    }
+
+    .filters input {
+      padding: 7px 10px;
+      font-size: 0.85rem;
+      color: #e6e9f2;
+      background: #171c2b;
+      border: 1px solid #343e5c;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .filters input:focus {
+      border-color: #8b7cf8;
+      box-shadow: 0 0 0 3px rgba(139, 124, 248, 0.2);
+    }
+
+    .filters input::-webkit-calendar-picker-indicator {
+      filter: invert(0.7);
+      cursor: pointer;
+    }
+
+    /* ===== Download button (yellow, matches your theme) ===== */
+    .download {
+      margin-left: auto;
+      padding: 10px 20px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #2a2118;
+      background: linear-gradient(180deg, #fbc84a, #f0b429);
+      border: 1px solid #d99e1b;
+      border-radius: 10px;
+      text-decoration: none;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(240, 180, 41, 0.25);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    }
+
+    .download:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(240, 180, 41, 0.35);
+    }
+
+    .download:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 4px rgba(240, 180, 41, 0.3);
+    }
+
+    .download:focus-visible {
+      outline: 2px solid #fbc84a;
+      outline-offset: 2px;
+    }
+
+    @media (max-width: 1600px) {
+      .control-group.info-cards {
+        position: relative;
+        right: 0;
+        transform: scale(1);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .download {
+        margin-left: 0;
+        flex: 1 1 100%;
+        text-align: center;
+      }
+    }
+
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .option {
+      padding: 8px 18px;
+      border: 1px solid #c9c9c9;
+      border-radius: 20px;
+      background: #616269;
+      color: #333;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .option:hover:not(:disabled) {
+      background: #ececf2;
+      border-color: #595CA9;
+    }
+
+    .option[data-active],
+    .option:active {
+      background: #6c63d2;
+      color: #fff;
+    }
+
+    .option:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      opacity: 0.8;
+      color: #1f2a44;
+    }
+
+    .info {
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .info p {
+      margin: 0 0 8px;
+      font-size: 0.9rem;
+      color: #fff;
+    }
+
+    .download {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: #fdb92a;
+      color: #1a1a1a;
+      font-weight: 700;
+      font-size: 0.9rem;
+      text-decoration: none;
+      transition: filter 0.15s;
+    }
+
+    .download:hover {
+      filter: brightness(1.08);
+    }
+
+    .time-input {
+      width: 7.5ch;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+
+</head>
+
+<body>
+
+  <main>
+
+    <svg></svg>
+
+    <section class="controls">
+      <div class="control-group">
+        <h3>Kaavio:</h3>
+        <div class="button-row">
+          <button class="option" data-active>Demo</button>
+          <button class="option">Reaali</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <h3>XAMK Kampus:</h3>
+        <div class="button-row">
+          <button class="option" data-active>Mikkeli</button>
+          <button class="option" disabled>Kouvola</button>
+          <button class="option" disabled>Kotka</button>
+          <button class="option" disabled>Savonlinna</button>
+        </div>
+      </div>
+      <span class="control-group info-cards">
+        <div class="info-card">
+          <span class="tyle">Vuoden kokonaiskulutus</span>
+          <span class="val">0</span>
+          <span class="ctype">kWh</span>
+        </div>
+        <div class="info-card">
+          <span class="tyle">Kuukauden keskikulutus</span>
+          <span class="val">0</span>
+          <span class="ctype">kWh</span>
+        </div>
+        <div class="info-card">
+          <span class="tyle">Päivän keskikulutus</span>
+          <span class="val">0</span>
+          <span class="ctype">kWh</span>
+        </div>
+        <div class="info-card">
+          <span class="tyle">Tunnin keskikulutus</span>
+          <span class="val">0</span>
+          <span class="ctype">kWh</span>
+        </div>
+      </span>
+      <div class="control-group info">
+
+        <h2 class="panel-title">Sähkönkulutuksen ajankohta:</h2>
+
+
+        <div class="filters time-panel">
+          <div class="time-panel-main">
+
+            <div class="slider-row">
+              <div class="slider-wrap" id="sliderWrap">
+                <div class="slider-track" id="sliderTrack">
+                  <div class="slider-fill" id="sliderFill"></div>
+                  <div class="slider-handle" id="handleStart" role="slider" tabindex="0" aria-label="Alku"
+                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="30"></div>
+                  <div class="slider-handle" id="handleEnd" role="slider" tabindex="0" aria-label="Loppu"
+                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="55"></div>
+                </div>
+                <div class="slider-tick-labels" id="tickLabels"></div>
+              </div>
+            </div>
+
+            <!-- Scrollable year switcher -->
+            <div class="year-selector" id="yearSelector" aria-label="Valitse vuosi">
+              <button class="year-btn active" data-year="2024">2024</button>
+              <button class="year-btn" data-year="2025">2025</button>
+              <button class="year-btn" data-year="2026">2026</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="filters">
+          <label for="dateStart">Mittauksen alku:</label>
+          <input id="dateStart" type="date" value="2026-01-01" />
+          <input type="text" class="time-input" pattern="([01]\d|2[0-3]):[0-5]\d" placeholder="00:00" maxlength="5" />
+
+          <label for="dateEnd">Mittauksen loppu:</label>
+          <input id="dateEnd" type="date" value="2027-01-01" />
+          <input type="text" class="time-input" pattern="([01]\d|2[0-3]):[0-5]\d" placeholder="00:00" maxlength="5" />
+
+          <a class="download" href="export_010226_030426.csv" download="kwh_data_010226_030426.csv" target="_blank"
+            rel="noopener noreferrer">Lataa .csv</a>
+        </div>
+      </div>
+
+  </main>
+
+  <footer style="display: flex; opacity:0.7; font-size:12px; padding:40px; line-height:1.6;">
+    <div style="width: 80%;">
+      <div>
+        Tietolähteet:
+        Suomen sähkönsiirron kantaverkon ylläpitäjä <a href="https://www.fingrid.fi/" target="_blank">Fingrid</a>
+      </div>
+      <div>
+        Kampuksen mittausdata: Kaakkois-Suomen ammattikorkeakoulu, Mikkelin kampus
+      </div>
+      <div>
+        Tietojen oikeellisuutta tai ajantasaisuutta ei voi taata reaaliaikaisesti.
+      </div>
+      <div>
+        Toteutettu osana <em>Työelämälähtöinen projektiosaaminen</em> -opintojaksoa.
+      </div>
+    </div>
+    <div style="width: 20%; right: auto;">
+      <img src="img/xamk.webp" style="width: 200px;" alt="XAMK-logo">
+    </div>
+  </footer>
+
+
+  <script>
+
+    function setInfoCards(yearly_kwh_total) {
+      const val0 = Math.round(yearly_kwh_total);
+      const val1 = Math.round(yearly_kwh_total / 12);
+      const val2 = Math.round(yearly_kwh_total / 365.25);
+      const val3 = Math.round(yearly_kwh_total / 365.25 / 24);
+      document.getElementsByClassName("info-cards")[0].children[0].getElementsByClassName("val")[0].textContent = `${val0}`;
+      document.getElementsByClassName("info-cards")[0].children[1].getElementsByClassName("val")[0].textContent = `${val1}`;
+      document.getElementsByClassName("info-cards")[0].children[2].getElementsByClassName("val")[0].textContent = `${val2}`;
+      document.getElementsByClassName("info-cards")[0].children[3].getElementsByClassName("val")[0].textContent = `${val3}`;
+    }
+
+    setInfoCards(3572671);
+
+    (function () {
+      var YEAR_MIN = 2024, YEAR_MAX = 2026;
+
+      var wrap = document.getElementById('sliderWrap');
+      var track = document.getElementById('sliderTrack');
+      var fill = document.getElementById('sliderFill');
+      var hStart = document.getElementById('handleStart');
+      var hEnd = document.getElementById('handleEnd');
+      var ticks = document.getElementById('tickLabels');
+
+      var dateStart = document.getElementById('dateStart');
+      var dateEnd = document.getElementById('dateEnd');
+      var yearSelector = document.getElementById('yearSelector');
+
+      // Two months shown across the slider for the selected year
+      var state = { year: 2024, start: 0, end: 0.4 }; // start/end as 0..1 of the year
+
+      function toFraction(evt) {
+        var rect = track.getBoundingClientRect();
+        var x = (evt.touches ? evt.touches[0].clientX : evt.clientX) - rect.left;
+        return Math.min(1, Math.max(0, x / rect.width));
+      }
+
+      function render() {
+        fill.style.left = (state.start * 100) + '%';
+        fill.style.width = ((state.end - state.start) * 100) + '%';
+        hStart.style.left = (state.start * 100) + '%';
+        hEnd.style.left = (state.end * 100) + '%';
+        hStart.setAttribute('aria-valuenow', Math.round(state.start * 100));
+        hEnd.setAttribute('aria-valuenow', Math.round(state.end * 100));
+        updateDates();
+      }
+
+      function updateDates() {
+        var s = fractionToDate(state.start, state.year);
+        var e = fractionToDate(state.end, state.year);
+        if (s <= e) {
+          dateStart.value = toISO(s);
+          dateEnd.value = toISO(e);
+        }
+      }
+
+      function fractionToDate(frac, year) {
+        var start = new Date(year, 0, 1).getTime();
+        var end = new Date(year + 1, 0, 1).getTime();
+        return new Date(start + frac * (end - start));
+      }
+
+      function toISO(d) {
+        return d.getFullYear() + '-' +
+          String(d.getMonth() + 1).padStart(2, '0') + '-' +
+          String(d.getDate()).padStart(2, '0');
+      }
+
+      function dateToFrac(d) {
+        var start = new Date(d.getFullYear(), 0, 1).getTime();
+        var end = new Date(d.getFullYear() + 1, 0, 1).getTime();
+        return Math.min(1, Math.max(0, (d.getTime() - start) / (end - start)));
+      }
+
+      // Month tick labels across the year
+      (function buildTicks() {
+        var months = ['Tammi', 'Helmi', 'Maalis', 'Huhti', 'Touko', 'Kesä',
+          'Heinä', 'Elo', 'Syys', 'Loka', 'Marras', 'Joulu'];
+        for (var i = 0; i < 12; i++) {
+          var span = document.createElement('span');
+          span.textContent = months[i];
+          span.style.left = ((i + 0.5) / 12 * 100) + '%';
+          ticks.appendChild(span);
+        }
+      })();
+
+      // --- Dragging ---
+      var activeHandle = null;
+
+      function nearestHandle(frac) {
+        var dStart = Math.abs(frac - state.start);
+        var dEnd = Math.abs(frac - state.end);
+        if (dStart <= dEnd) return hStart;
+        return hEnd;
+      }
+
+      function applyDrag(frac) {
+        var minGap = 0.01;
+        if (activeHandle === hStart) {
+          state.start = Math.min(frac, state.end - minGap);
+        } else {
+          state.end = Math.max(frac, state.start + minGap);
+        }
+        render();
+      }
+
+      function onPointerDown(e) {
+        var frac = toFraction(e);
+        activeHandle = nearestHandle(frac);
+        activeHandle.classList.add('dragging');
+        applyDrag(frac);
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+      }
+
+      function onPointerMove(e) {
+        if (activeHandle) applyDrag(toFraction(e));
+      }
+
+      function onPointerUp() {
+        if (activeHandle) activeHandle.classList.remove('dragging');
+        activeHandle = null;
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+      }
+
+      wrap.addEventListener('pointerdown', onPointerDown);
+
+      // Keyboard support for handles
+      function keyStep(handle, delta) {
+        if (handle === hStart) {
+          state.start = Math.min(1, Math.max(0, state.start + delta));
+          if (state.start > state.end - 0.01) state.start = state.end - 0.01;
+        } else {
+          state.end = Math.min(1, Math.max(0, state.end + delta));
+          if (state.end < state.start + 0.01) state.end = state.start + 0.01;
+        }
+        render();
+      }
+
+      [hStart, hEnd].forEach(function (handle) {
+        handle.addEventListener('keydown', function (e) {
+          var step = e.shiftKey ? 1 / 12 : 1 / 96; // shift = one month
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); keyStep(handle, -step); }
+          if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); keyStep(handle, step); }
+        });
+      });
+
+      // --- Year selector: switch view to the chosen year ---
+      yearSelector.addEventListener('click', function (e) {
+        var btn = e.target.closest('.year-btn');
+        if (!btn) return;
+        yearSelector.querySelectorAll('.year-btn').forEach(function (b) {
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        state.year = parseInt(btn.dataset.year, 10);
+
+        // Reset the range to the full year and sync date inputs
+        state.start = 0;
+        state.end = 1;
+        render();
+        dateStart.value = state.year + '-01-01';
+        dateEnd.value = state.year + '-12-31';
+        render();
+
+        scrollToActiveYear();
+      });
+
+      // Keep the active year visible in the scrollable selector
+      function scrollToActiveYear() {
+        var active = yearSelector.querySelector('.year-btn.active');
+        if (active) active.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      }
+
+      // --- Manual date edits drive the slider back ---
+      function syncFromDates() {
+        var s = new Date(dateStart.value);
+        var f = new Date(dateEnd.value);
+        if (!isNaN(s) && s.getFullYear() === state.year) state.start = dateToFrac(s);
+        if (!isNaN(f) && f.getFullYear() === state.year) state.end = dateToFrac(f);
+        if (state.end - state.start < 0.01) state.end = Math.min(1, state.start + 0.01);
+        render();
+      }
+
+      dateStart.addEventListener('change', syncFromDates);
+      dateEnd.addEventListener('change', syncFromDates);
+
+      // Initial render
+      render();
+      scrollToActiveYear();
+    })();
+
+
+    // SANKEY DIAGRAM //
+
+    const height = 440 + window.innerHeight * 0.1;
+    var width = window.innerWidth * 0.9;
+    const svg = d3.select("svg").attr("width", width).attr("height", height);
+
+    var selected_sankey_type = 0;
+
+    const color_default = "#424480";
+    const color_hover = "#9c9b76";
+    const color_disabled = "#777891";
+
+    const savorex_json =
+    [
+      // graph_mkl_demo //
+      // 2024
+      // ...
+      // 2025
+      // ...
+      // 2026:
+      {
+        name: "Demo",
+        total_kwh_mkl: 1474627 * 1.851851852 * 1.78,
+        nodes: [
+          { name: "Mikkelin Kampus" },                                    // Muuntamo
+          { name: "PK" },                                                 // PK
+          { name: "PK1" },                                                // PK1
+          { name: "Mikpoli" },                                            // Mikpoli
+          { name: "A-rakennus LNK1P" },
+          { name: "B-rakennus" },
+          { name: "D-rakennus JKD1" },
+          { name: "D-rakennus LNK1N" },
+          { name: "D-rakennus jäähdytys, IJK" },
+          { name: "D:n keittiö" },
+          { name: "F-rakennus" },
+          { name: "X-rakennus" },
+          { name: "Autolämmitykset" },
+          { name: "KJK1" },
+          { name: "PK10" },                                               // PK10
+          { name: "E-rakennus" },
+          { name: "E-rakennus ERK002" },
+          { name: "E-rakennus ERK201" },
+          { name: "E-rakennus ERK302" },
+          { name: "E-rakennus ERK401" },
+          { name: "E-rakennus ERK205" },
+          { name: "E-rakennus ERK303" },
+          { name: "E-rakennus ERK001 ja 101 sekä JKE0.1-0.4" },
+          { name: "C-rakennus NK1" },
+          { name: "D-rakennus DNK1" },
+          { name: "Autolämmitys PR-keskus" },
+          { name: "H+K-rakennukset" },                                    // H-K-rakennukset
+          { name: "K-rakennus" },
+          { name: "H-rakennus" },
+          { name: "Muut" },                                               // PK10 muut
+          { name: "Mikpoli" },                                               // PK Mikpoli
+          { name: "M-rakennus" },
+          { name: "T-rakennus" },
+          { name: "Muut" }                                                // Mikpoli muut
+        ],
+        links: [
+          { source: 0, target: 1, value: 1474627 * 1.851851852 * 1.78 },                       // OSTO => PK
+          { source: 1, target: 2, value: 1474627 * 1.851851852 * 1.78 * 0.8 },                       // PK => PK1 80%
+          { source: 2, target: 4, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => A-rakennus LNK1P
+          { source: 2, target: 5, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => B-rakennus
+          { source: 2, target: 6, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => D-rakennus JKD1
+          { source: 2, target: 7, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => D-rakennus LNK1N
+          { source: 2, target: 8, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => D-rakennus jäähdytys, IJK
+          { source: 2, target: 9, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => D:n keittiö
+          { source: 2, target: 10, value: 1474627 * 1.851851852 * 0.1 },                  // PK1 => F-rakennus
+          { source: 2, target: 11, value: 1474627 * 1.851851852 * 0.1 },                  // PK1 => X-rakennus
+          { source: 2, target: 12, value: 1474627 * 1.851851852 * 0.1 },                  // PK1 => Autolämmitys
+          { source: 2, target: 13, value: 1474627 * 1.851851852 * 0.1 },                  // PK1 => KJK1
+          { source: 2, target: 14, value: 1474627 },                                      // PK1 => PK10
+          { source: 14, target: 15, value: 1474627 * 0.4 },                               // PK10 => E-rakennus
+          { source: 15, target: 16, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK002
+          { source: 15, target: 17, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK201
+          { source: 15, target: 18, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK302
+          { source: 15, target: 19, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK401
+          { source: 15, target: 20, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK205
+          { source: 15, target: 21, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK303
+          { source: 15, target: 22, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK001 ja 101 sekä JKE0.1-0.4
+          { source: 14, target: 23, value: 1474627 * 0.36 * 0.35 },                       // PK10 => C-rakennus NK1
+          { source: 14, target: 24, value: 1474627 * 0.36 * 0.15 },                       // PK10 => D-rakennus DNK1
+          { source: 14, target: 25, value: 1474627 * 0.36 * 0.1 },                        // PK10 => Autolämmitys PR-keskus
+          { source: 14, target: 26, value: 1474627 * 0.36 * 0.5 },                        // PK10 => H-K-rakennukset
+          { source: 26, target: 27, value: 1474627 * 0.36 * 0.5 * 0.7 },                  // H-K-rakennukset => K-rakennus
+          { source: 26, target: 28, value: 1474627 * 0.36 * 0.5 * 0.3 },                  // H-K-rakennukset => H-rakennus
+          { source: 14, target: 29, value: 1474627 * 0.02 },                              // PK10 muut
+          { source: 1, target: 3, value: 1474627 * 1.851851852 * 1.78 * 0.2 },                       // PK => Mikpoli 20%
+          { source: 3, target: 4, value: 1474627 * 1.851851852 * 1.78 * 0.2 },
+          { source: 4, target: 30, value: 1474627 * 1.851851852 * 1.78 * 0.2 * 0.6 },    // Mikpoli => M-rakennus 60%
+          { source: 4, target: 31, value: 1474627 * 1.851851852 * 1.78 * 0.2 * 0.3 },    // Mikpoli => T-rakennus 30%
+          { source: 4, target: 32, value: 1474627 * 1.851851852 * 1.78 * 0.2 * 0.1 }     // Mikpoli => muut 10%
+        ]
+      },
+      // graph_mkl_reaali //
+      {
+        name: "Reaali",
+        total_kwh_mkl: 16220897,
+        nodes: [
+          { name: "Mikkelin Kampus" },
+          { name: "PK" },
+          { name: "E-Rakennus (PK10)" },
+          { name: "Muu kampus" }
+        ],
+        links: [
+          { source: 0, target: 1, value: 16220897 },
+          { source: 1, target: 2, value: 1474627 },
+          { source: 1, target: 3, value: 16220897 - 1474627 }
+        ]
+      }
+    ];
+
+    function drawSankey(container, graph, offsetY, totalValue) {
+      const sankey = d3.sankey()
+        .nodeWidth(8)
+        .nodePadding(24)
+        .nodeAlign(d3.sankeyLeft)
+        .extent([[48, 12], [width - 128, height - 24]]);
+
+      const { nodes, links } = sankey({
+        nodes: graph.nodes.map(d => Object.assign({}, d)),
+        links: graph.links.map(d => Object.assign({}, d))
+      });
+
+      const g = container.append("g").attr("transform", `translate(20, ${offsetY})`);
+
+      // title
+      g.append("text")
+        .attr("x", width / (3 * 4))
+        .attr("y", height)
+        .attr("text-anchor", "middle")
+        .style("font-size", "18px")
+        .style("font-weight", "700")
+        .style("fill", "#e6e9f2")
+        .text("XAMK Energy");
+
+      function pct(v) {
+        return ((v / totalValue) * 100).toFixed(1) + "%";
+      }
+
+      const link = g.append("g")
+        .selectAll("g")
+        .data(links)
+        .join("g");
+
+      link.append("path")
+        .attr("d", d3.sankeyLinkHorizontal())
+        .attr("fill", "none")
+        .attr("stroke", d => color_default)
+        .attr("stroke-opacity", 0.7)
+        .attr("stroke-width", d => Math.max(1, d.width))
+        .on("mouseover", function () {
+          d3.select(this)
+            .attr("stroke", color_hover);
+        })
+        .on("mouseout", function () {
+          d3.select(this)
+            .attr("stroke", color_default);
+        });
+
+      link.append("text")
+        .attr("x", d => (d.source.x1 + d.target.x0) / 2)
+        .attr("y", d => (d.y0 + d.y1) / 2)
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "middle")
+        .attr("pointer-events", "none")
+        .text(d => `${d.value.toFixed(0)} kWh (${pct(d.value)})`);
+
+      const node = g.append("g")
+        .selectAll("g")
+        .data(nodes)
+        .join("g");
+
+      node.append("rect")
+        .attr("x", d => d.x0)
+        .attr("y", d => d.y0)
+        .attr("height", d => d.y1 - d.y0)
+        .attr("width", d => d.x1 - d.x0)
+        .attr("fill", "#fdb92a")
+
+      const nodeText = node.append("text")
+        .attr("x", d => d.sourceLinks.length === 0 ? d.x1 + 10 : (d.x0 + d.x1) / 2)
+        .attr("y", d => (d.y1 + d.y0) / 2)
+        .attr("dy", "0.35em")
+        .attr("font-weight", "bold")
+        .attr("pointer-events", "none")
+        .attr("text-anchor", d => d.sourceLinks.length === 0 ? "start" : "middle")
+        .text(d => d.name);
+
+      nodeText.each(function (d) {
+        const box = this.getBBox();
+        const pad = 8;
+        const isEnd = d.sourceLinks.length === 0;
+        const tx = isEnd ? d.x1 + 10 + box.width / 2 : (d.x0 + d.x1) / 2;
+        const ty = (d.y1 + d.y0) / 2;
+        d3.select(this.parentNode)
+          .insert("rect", "text")
+          .attr("x", tx - box.width / 2 - pad)
+          .attr("y", ty - box.height / 2 - pad)
+          .attr("width", box.width + pad * 2)
+          .attr("height", box.height + pad * 2)
+          .attr("fill", "#595ca9")
+          .attr("rx", 2)
+          .attr("stroke", "#000")
+          .attr("stroke-width", 1);
+      });
+    }
+
+    function drawDemoGraph() {
+      drawSankey(svg, savorex_json[0], 0, savorex_json[0].total_kwh_mkl);
+    }
+
+    function drawReaaliGraph() {
+      drawSankey(svg, savorex_json[1], 0, savorex_json[1].total_kwh_mkl);
+    }
+
+    function updateDiagrams() {
+      width = window.innerWidth * 0.9;
+      d3.select("svg").selectAll("*").remove();
+      d3.select("svg").attr("width", width).attr("height", height);
+      if (selected_sankey_type == 0) {
+        drawDemoGraph();
+      } else {
+        drawReaaliGraph();
+      }
+    }
+
+    // Control panel
+    document.querySelectorAll(".button-row").forEach(row => {
+      row.addEventListener("click", e => {
+        const btn = e.target.closest("button.option");
+        if (!btn || btn.disabled) return;
+        row.querySelectorAll(".option").forEach(b => b.removeAttribute("data-active"));
+        btn.setAttribute("data-active", "");
+        if (btn.textContent == "Demo") {
+          selected_sankey_type = 0;
+        } else {
+          selected_sankey_type = 1;
+        }
+        updateDiagrams();
+      });
+    });
+
+    // Control-panel: time-input
+    document.querySelectorAll(".time-input").forEach((input) => {
+      // Hard-block: field can only ever hold HH:MM with minutes in 15-min steps.
+      input.addEventListener("input", () => {
+        let digits = input.value.replace(/\D/g, "").slice(0, 4);
+
+        // hour can never exceed 23. If the second digit overflows a
+        // one-digit hour ("9" + "4"), pad it: 94 -> 094 (= 09:4x)
+        if (digits.length === 2 && parseInt(digits, 10) > 23) {
+          digits = ("0" + digits).slice(0, 4);
+        }
+
+        // minutes must be 00/15/30/45: otherwise drop the last keystroke
+        if (digits.length === 4 && parseInt(digits.slice(2), 10) % 15 !== 0) {
+          digits = digits.slice(0, 3);
+          digits[3] = "0";
+        }
+
+        input.value =
+          digits.length > 2
+            ? digits.slice(0, 2) + ":" + digits.slice(2)
+            : digits;
+      });
+
+      // End Control-panel //
+
+      // pad on blur: "9" -> "09:00", "14:" -> "14:00"
+      input.addEventListener("blur", () => {
+        const digits = input.value.replace(/\D/g, "");
+        let h = parseInt(digits.slice(0, 2), 10);
+        let min = parseInt(digits.slice(2, 4) || "0", 10);
+        if (isNaN(h) || h > 23) h = 0;
+        if (isNaN(min) || min % 15 !== 0) min = 0;
+        input.value =
+          String(h).padStart(2, "0") + ":" + String(min).padStart(2, "0");
+      });
+    });
+
+    window.onresize = updateDiagrams;
+    updateDiagrams();
+
+  </script>
+
+</body>
+
+</html>
