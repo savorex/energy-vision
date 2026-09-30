@@ -17,10 +17,10 @@ CREATE TABLE campuses (
 );
 
 INSERT INTO campuses (city_id, name) VALUES
-	(1, 'Blimoren kampus'),
-	(2, 'Glaphia kampus'),
-	(3, 'Rudvinen kampus'),
-	(4, 'Osedon kampus');
+	(1, 'Blimoren campus'),
+	(2, 'Glaphia campus'),
+	(3, 'Rudvinen campus'),
+	(4, 'Osedon campus');
 
 CREATE TABLE buildings (
     id INT AUTO_INCREMENT PRIMARY KEY,

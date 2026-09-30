@@ -11,9 +11,9 @@ Aidon HAN meter - P1/UART──▶ ESP32 Sender ──MQTT/TLS :8883──▶ MQ
 
 ## Integrations
 
-| Usecase | Description | Link |
+| Use-case | Description | Link |
 |---|---|---|
-| **XAMK Energy** | Campus comsumtion data Sankey diagram | https://hanmeter.duckdns.org/xamk-energy/
+| **XAMK Energy** | Campus consumption data sankey-diagram | https://hanmeter.duckdns.org/xamk-energy/
 
 ## Components
 
