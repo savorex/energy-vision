@@ -70,8 +70,8 @@ Subscribes to the MQTT topics and visualises live consumption and production.
 | Topic | Direction | Payload | Interval |
 |---|---|---|---|
 | `xamkenergy/<MAC>/kwh` | device => broker | (cumulative energy) kWh | 15 s |
-| `solar` | simulator => broker | 0.00 - 8.50 kWh | 15s |
-| `solar` | simulator => broker | 0.00 - 15.00 kWh | 15s |
+| `solar` | simulator => broker | 0.00 - 20.00 kWh | 15s |
+| `wind` | simulator => broker | 0.00 - 15.00 kWh | 15s |
 
 ## Broker setup (mosquitto-tls/)
 

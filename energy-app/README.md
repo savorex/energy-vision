@@ -1,9 +1,9 @@
-# Savorex Energy
+# Energy App
 Web-based demonstrability for clients via metering services.
 
 ## Project Strucure:
 ```
-savorex-energy/
+energy-app/
     app/
         Dockerfile
         package.json
@@ -44,15 +44,12 @@ Note: you can set the name of the application yourself. Change `energy-vision` t
 `sudo systemctl reload nginx`
 
 ### one-off: apply the new table to the running DB
-`sudo docker exec -i sankey_energy_app_mysql mysql -usankey -psankeypass sankeydb < db/init/02-chart-info.sql`
+`sudo docker exec -i energy-vision-db mysql -usankey -psankeypass sankeydb < db/init/02-chart-info.sql`
 
 
 If you already started the DB once, changing init.sql will do nothing unless you remove the volume:
 ```
-sudo docker-compose down -v
-sudo docker-compose up
+sudo docker compose down -v
+sudo docker compose up
 ```
 Warning: this deletes database data.
-
-For further reading, checkout:
-```docker-compose.yml```
