@@ -23,10 +23,10 @@ INSERT INTO campuses (city_id, name) VALUES
 	(4, 'Osedon campus');
 
 CREATE TABLE buildings (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    campus_id INT NOT NULL,
-    name VARCHAR(100),
-    FOREIGN KEY (campus_id) REFERENCES campuses (id)
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	campus_id INT NOT NULL,
+	name VARCHAR(100),
+	FOREIGN KEY (campus_id) REFERENCES campuses (id)
 );
 
 CREATE TABLE measurements (

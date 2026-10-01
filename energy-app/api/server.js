@@ -17,6 +17,17 @@ const pool = mysql.createPool(
     }
 );
 
+app.get("/api", (req, res) => {
+  res.json({
+    endpoints: [
+      "GET /api/charts",
+      "GET /api/charts/:id/flows",
+      "GET /api/charts/:id/info",
+      "GET /api/charts/:id/panel",
+    ],
+  });
+});
+
 // List available charts (for the buttons)
 app.get("/api/charts", async (req, res) => {
   const [rows] = await pool.query(

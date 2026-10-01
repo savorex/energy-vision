@@ -24,23 +24,23 @@ You need Docker Compose (V2) to run the commands: install it via ```sudo apt ins
 ## Building & Running container:
 Docker Compose manages both building and running the application.
 
-`sudo docker compose -p savorex up --build -d`
+`sudo docker compose -p energy-vision up --build -d`
 
-Note: you can set the name of the application yourself. Change `savorex` to your liking.
+Note: you can set the name of the application yourself. Change `energy-vision` to your liking.
 
 ## Setting up Nginx proxy:
-### 1. Write your site config
-`sudo nano /etc/nginx/sites-available/energy-app`
+### 1. Copy the site config
+`sudo cp app/nginx.conf /etc/nginx/sites-available/energy-vision`
 
 ### 2. Enable it = symlink into sites-enabled
-`sudo ln -s /etc/nginx/sites-available/energy-app /etc/nginx/sites-enabled/`
+`sudo ln -s /etc/nginx/sites-available/energy-vision /etc/nginx/sites-enabled/`
 
 ### 3. Validate, then reload
 `sudo nginx -t`
 `sudo systemctl reload nginx`
 
 ### To disable a site (file stays in sites-available)
-`sudo rm /etc/nginx/sites-enabled/energy-app`
+`sudo rm /etc/nginx/sites-enabled/energy-vision`
 `sudo systemctl reload nginx`
 
 ### one-off: apply the new table to the running DB

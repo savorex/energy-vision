@@ -1,14 +1,13 @@
 services:
-  app:
+  frontend:
     build: ./app
     container_name: ${APP_NAME:-savorex-energy}-app
     restart: unless-stopped
     ports:
       - "6767:80"
     depends_on:
-      - api
-  api:
-    build: ./api
+      - backend
+  backend:
     container_name: ${APP_NAME:-savorex-energy}-api
     restart: unless-stopped
     environment:
@@ -18,6 +17,9 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       PORT: ${PORT}
+    build:
+      context: api
+      target: builder
     depends_on:
       db:
         condition: service_healthy
