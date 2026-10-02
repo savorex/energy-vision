@@ -53,3 +53,10 @@ sudo docker compose down -v
 sudo docker compose up
 ```
 Warning: this deletes database data.
+
+
+### Force Docker to stop and remove ALL CONTAINERS. DO NOT RUN!
+```
+sudo docker stop $(sudo docker ps -a -q)
+sudo docker rm $(sudo docker ps -a -q)
+```

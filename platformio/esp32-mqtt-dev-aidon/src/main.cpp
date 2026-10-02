@@ -57,19 +57,13 @@ size_t linePos = 0;
 #define MQTT_HOST IPAddress(MQTT_IP0, MQTT_IP1, MQTT_IP2, MQTT_IP3)
 #define MQTT_PORT 8883 // TLS
 
-IPAddress local_IP(172, 16, 8, 1);
-IPAddress gateway(172, 16, 1, 1);
-IPAddress subnet(255, 255, 0, 0);
-IPAddress primaryDNS(8, 8, 8, 8);
-IPAddress secondaryDNS(8, 8, 4, 4);
+double energy_ap_kwh = 0;     // A+
+double energy_ap_kwh_out = 0; // A+
+double energy_am_kwh = 0;     // A-
+double energy_am_kwh_out = 0; // A-
 
-double energy_ap_kwh = 0;         // A+
-double energy_ap_kwh_out = 0;     // A+
-double energy_am_kwh = 0;         // A-
-double energy_am_kwh_out = 0;     // A-
-
+unsigned long publishInterval = 3000;
 unsigned long lastPublish = 0;
-const long publishInterval = 15000;
 
 const unsigned long WIFI_RETRY_MS = 2000;
 const unsigned long MQTT_RETRY_FAST_MS = 5000;
@@ -82,23 +76,38 @@ uint8_t mqttFailures = 0;
 WiFiClientSecure tlsClient;
 PubSubClient mqtt(tlsClient);
 
-char topic[32];
+char topic_ap[48];
+char topic_am[48];
 char clientId[24];
 
 // Non-blocking
 void connectToWifi()
 {
   WiFi.mode(WIFI_STA);
+  WiFi.setTxPower(WIFI_POWER_2dBm);
   WiFi.setSleep(WIFI_PS_NONE);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print("Attempting to connect to SSID: ");
+  Serial.print("Connecting to SSID: ");
   Serial.println(WIFI_SSID);
-  // WiFi.config should be run after WiFi.begin
-  if (WiFi.SSID() == WIFI_SSID)
+}
+
+bool setupTime()
+{
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  setenv("TZ", "EET-2EEST,M3.5.0/3,M10.5.0/4", 1); // Europe/Helsinki
+  tzset();
+
+  Serial.print("[time] waiting for NTP");
+  uint32_t start = millis();
+  while (time(nullptr) < 1600000000 && millis() - start < 12000)
   {
-    Serial.println("\nManual IP Configuration");
-    WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
+    delay(500);
+    Serial.print(".");
   }
+
+  bool ok = time(nullptr) >= 1600000000;
+  Serial.println(ok ? " ok" : " FAILED");
+  return ok;
 }
 
 // ---- HAN line parsing ----
@@ -107,49 +116,52 @@ void processLine(char *line)
   // Note that there are 2 important readings outputted by HAN:
   // [1.] 1-0:1.8.0.255 A+ Kumulatiivinen tuntikohtainen sähköverkosta otettu pätöenergia.
   // [2.] 1-0:2.8.0.255 A- Kumulatiivinen tuntikohtainen sähköverkkoon syötetty pätöenergia.
-  const char *patterns_ap[] =
-  {
-    "1-0:1.8.0(",
-    "1.8.0(",
-    "1-1:1.8.0("
-  };
-  const char *patterns_am[] =
-  {
-    "1-0:2.8.0(",
-    "2.8.0(",
-    "1-1:2.8.0("
-  };
-
-  for (int i = 0; i < 3; i++)
-  {
-    char *p = strstr(line, patterns_ap[i]);
-    if (p != NULL)
+  const char *patterns[2][3] =
     {
-      p = strchr(p, '(');
+      {"1-0:1.8.0(", "1.8.0(", "1-1:1.8.0("}, // A+
+      {"1-0:2.8.0(", "2.8.0(", "1-1:2.8.0("}  // A-
+    };
+
+  for (int g = 0; g < 2; g++)
+  {
+    for (int i = 0; i < 3; i++)
+    {
+      char *p = strstr(line, patterns[g][i]);
       if (p != NULL)
       {
-        p++;
-
-        char valuestr_ap[32];
-        size_t vi = 0;
-        while (*p != ')' && *p != '*' && *p != '\0' && vi < sizeof(valuestr_ap) - 1)
+        p = strchr(p, '(');
+        if (p != NULL)
         {
-          valuestr_ap[vi++] = *p++;
+          p++;
+
+          char valuestr[32];
+          size_t vi = 0;
+          while (*p != ')' && *p != '*' && *p != '\0' && vi < sizeof(valuestr) - 1)
+          {
+            valuestr[vi++] = *p++;
+          }
+          valuestr[vi] = '\0';
+
+          vi = 0;
+          double v = atof(valuestr);
+          if (g == 0)
+          {
+            energy_ap_kwh = v;
+            energy_ap_kwh_out = v;
+          }
+          else
+          {
+            energy_am_kwh = v;
+            energy_am_kwh_out = v;
+          }
+
+          Serial.print("Otettu pätöteho (kWh): ");
+          Serial.print(energy_ap_kwh_out, 3);
+          Serial.print(" | Syötetty pätöteho (kWh): ");
+          Serial.println(energy_am_kwh_out, 3);
         }
-        valuestr_ap[vi] = '\0';
-
-        vi = 0;
-        
-
-        energy_ap_kwh = atof(valuestr_ap);
-        energy_ap_kwh_out = energy_ap_kwh;
-
-        Serial.print("Otettu pätöteho (kWh): ");
-        Serial.print(energy_ap_kwh_out, 3);
-        Serial.print(" | Syötetty pätöteho (kWh): ");
-        Serial.println(energy_am_kwh_out, 3);
+        return;
       }
-      return;
     }
   }
 } // processLine
@@ -194,37 +206,39 @@ void setup()
   pinMode(PIN_LED_BUILTIN, OUTPUT);
   digitalWrite(PIN_LED_BUILTIN, false);
 
-  // Sync time with time server
-  configTime(0, 0, "pool.ntp.org", "time.google.com");
-
-  // Unique topic and client id per board
-  snprintf(topic, sizeof(topic), "%s/%02X%02X%02X%02X%02X%02X/kwh",
-    MQTT_CLIENT_TOPIC,
-    WiFi.macAddress()[0], WiFi.macAddress()[1],
-    WiFi.macAddress()[2], WiFi.macAddress()[3],
-    WiFi.macAddress()[4], WiFi.macAddress()[5]
-  );
+  // Unique client_id and topic per board
   snprintf(clientId, sizeof(clientId), "%s-%02X%02X%02X%02X%02X%02X",
-    MQTT_CLIENT_NAME,
-    WiFi.macAddress()[0], WiFi.macAddress()[1],
-    WiFi.macAddress()[2], WiFi.macAddress()[3],
-    WiFi.macAddress()[4], WiFi.macAddress()[5]
-  );
+          MQTT_CLIENT_NAME,
+          WiFi.macAddress()[0], WiFi.macAddress()[1],
+          WiFi.macAddress()[2], WiFi.macAddress()[3],
+          WiFi.macAddress()[4], WiFi.macAddress()[5]);
+  snprintf(topic_ap, sizeof(topic_ap), "%s/%02X%02X%02X%02X%02X%02X/kwh_ap",
+           MQTT_CLIENT_TOPIC,
+           WiFi.macAddress()[0], WiFi.macAddress()[1],
+           WiFi.macAddress()[2], WiFi.macAddress()[3],
+           WiFi.macAddress()[4], WiFi.macAddress()[5]);
+  snprintf(topic_am, sizeof(topic_am), "%s/%02X%02X%02X%02X%02X%02X/kwh_am",
+           MQTT_CLIENT_TOPIC,
+           WiFi.macAddress()[0], WiFi.macAddress()[1],
+           WiFi.macAddress()[2], WiFi.macAddress()[3],
+           WiFi.macAddress()[4], WiFi.macAddress()[5]);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(WIFI_PS_NONE);
+  // MQTT Settings
+  mqtt.setBufferSize(512);
+  mqtt.setSocketTimeout(15);
+  mqtt.setServer(MQTT_HOST, MQTT_PORT);
+  mqtt.setKeepAlive(60);
 
   // Verify with the MQTT broker
-  tlsClient.setInsecure();
   // tlsClient.setCACert(MQTT_CA_CERT);
   // tlsClient.setCertificate(ESP32_CA_CERT);
   // tlsClient.setPrivateKey(ESP32_RSA_KEY);
-  tlsClient.setTimeout(3);
-
-  mqtt.setServer(MQTT_HOST, MQTT_PORT);
-  mqtt.setKeepAlive(20);
-  otaInit(clientId);
+  tlsClient.setInsecure();
+  tlsClient.setHandshakeTimeout(30);
   connectToWifi();
+  otaInit(clientId);
+  // Sync time with time server
+  setupTime();
 } // setup
 
 void loop()
@@ -242,6 +256,10 @@ void loop()
   }
 
   otaLoop();
+  if (otaInProgress)
+  {
+    return;
+  }
 
   if (!mqtt.connected())
   {
@@ -269,7 +287,6 @@ void loop()
       if (mqtt.connect(clientId, MQTT_USERNAME, MQTT_PASSWORD))
       {
         mqttFailures = 0;
-        linePos = 0;
         Serial.println("MQTT connected");
       }
       else
@@ -290,7 +307,6 @@ void loop()
     mqtt.loop();
   }
 
-
   // Drain the HAN buffer
   while (Serial2.available() > 0)
   {
@@ -307,14 +323,21 @@ void loop()
     }
   }
 
-  if (millis() - lastPublish >= publishInterval)
+  if (mqtt.connected() && millis() - lastPublish >= publishInterval)
   {
     lastPublish = millis();
-    char plain[35];
-    snprintf(plain, sizeof(plain), "%.3f", energy_ap_kwh_out);
-    mqtt.publish(topic, plain);
-
-    Serial.print("Trying to publish: ");
-    Serial.println(plain);
+    Serial.printf("Publishing: A+ %.3f | A- %.3f\n", energy_ap_kwh_out, energy_am_kwh_out);
+    if (energy_ap_kwh_out > 0)
+    {
+      char apStr[16];
+      snprintf(apStr, sizeof(apStr), "%.3f", energy_ap_kwh_out);
+      mqtt.publish(topic_ap, apStr);
+    }
+    if (energy_am_kwh_out > 0)
+    {
+      char amStr[16];
+      snprintf(amStr, sizeof(amStr), "%.3f", energy_am_kwh_out);
+      mqtt.publish(topic_am, amStr);
+    }
   }
 } // loop

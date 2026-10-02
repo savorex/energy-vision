@@ -1,8 +1,8 @@
-# Savorex ESP32 MQTT Wind Simulator
+# Savorex ESP32 MQTT Solar Simulator
 Connects to an MQTT broker and sends data periodically. Can simulate different weather situations:
-1. No wind
-2. Normal wind
-3. Windy
+1. No sun
+2. Normal sun
+3. Sunny
 
 ## To upload via PlatformIO:
 ### using IP or by mDNS hostname:

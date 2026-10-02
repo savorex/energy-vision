@@ -1,8 +1,5 @@
-# Savorex ESP32 MQTT Wind Simulator
-Connects to an MQTT broker and sends data periodically. Can simulate different weather situations:
-1. No wind
-2. Normal wind
-3. Windy
+# Savorex ESP32 MQTT Aidon Simulator
+Connects to an MQTT broker and sends peak power wattage (A+ and A-) data periodically.
 
 ## To upload via PlatformIO:
 ### using IP or by mDNS hostname:

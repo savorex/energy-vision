@@ -15,7 +15,7 @@
 #include <ArduinoOTA.h>
 #include "conf.h"
 
-uint8_t otaInProgress = false;
+uint8_t otaInProgress = 0;
 
 inline void otaInit(const char *device_id)
 {
@@ -28,7 +28,7 @@ inline void otaInit(const char *device_id)
 
   ArduinoOTA.onStart([]()
   {
-    otaInProgress = true;
+    otaInProgress = 1;
     String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
     Serial.println("[ota] update started (" + type + "), pausing MQTT");
   });
@@ -44,11 +44,13 @@ inline void otaInit(const char *device_id)
 
   ArduinoOTA.onEnd([]()
   {
+    otaInProgress = 0;
     Serial.println("\n[ota] done, rebooting");
   });
 
   ArduinoOTA.onError([](ota_error_t err)
   {
+    otaInProgress = 0;
     Serial.printf("[ota] ERROR[%u]: ", err);
     switch (err) {
       case OTA_AUTH_ERROR:
@@ -67,7 +69,6 @@ inline void otaInit(const char *device_id)
         Serial.println("end failed");
         break;
     }
-    otaInProgress = false;
   });
 
   ArduinoOTA.begin();

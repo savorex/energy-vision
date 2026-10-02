@@ -46,8 +46,8 @@ Firmware for an ESP32 wired to the Aidon meter's HAN/P1 port.
 - **Publishing:** the parsed value is published every 15 s.
 - **MQTT/TLS:** connects to Mosquitto on port **8883** via `WiFiClientSecure`, verifying the broker with a CA certificate (`setCACert` — do *not* use `setInsecure()` in production).
 - **Identity:** topic and client ID derive from the WiFi MAC, so every board is unique without configuration:
-  - topic: `aidon/<MAC>/kwh`
-  - client ID: `aidon-<MAC>`
+  - topic: `han/<MAC>/kwh`
+  - client ID: `han-<MAC>`
 - **Status LED:** fast blink = looking for WiFi, slow blink = WiFi up / MQTT down, solid = fully online.
 - **Resilience:** non-blocking reconnect loop (WiFi retry 2 s, MQTT retry 5 s); `mqtt.loop()` runs every iteration so the keepalive is never starved.
 
@@ -69,7 +69,8 @@ Subscribes to the MQTT topics and visualises live consumption and production.
 
 | Topic | Direction | Payload | Interval |
 |---|---|---|---|
-| `xamkenergy/<MAC>/kwh` | device => broker | (cumulative energy) kWh | 15 s |
+| `xamkenergy/<MAC>/ap_kwh` | device => broker | (cumulative A+ energy) kWh | 15 s |
+| `xamkenergy/<MAC>/am_kwh` | device => broker | (cumulative A- energy) kWh | 15 s |
 | `solar` | simulator => broker | 0.00 - 20.00 kWh | 15s |
 | `wind` | simulator => broker | 0.00 - 15.00 kWh | 15s |
 
@@ -84,6 +85,7 @@ Listeners:
 - **8883** — MQTT over TLS (`protocol mqtt`, server + CA certs mounted).
 - **1884** — plaintext MQTT for quick local debugging (still password-protected).
 
+## TLS Handshake:
 Quick end-to-end checks:
 
 ```bash
@@ -93,6 +95,25 @@ openssl s_client -connect <broker-host>:8883 -CAfile ca.crt -verify_return_error
 # Publish a test value
 mosquitto_pub -h <broker-host> -p 8883 --cafile ca.crt -u <user> -P <pass> -t aidon/test/kwh -m 42.0
 ```
+
+### Generating a PEM key for TLS handshakes (Broker and ESP32):
+```
+openssl req -new -x509 -days 365 -extensions v3_ca -keyout ca.key -out ca.crt -passout pass:1234 -subj '/CN=myserver.dynamic-dns.net'
+
+openssl genrsa -out mosquitto.key 2048
+openssl req -out mosquitto.csr -key mosquitto.key -new -subj '/CN=localhost'
+openssl x509 -req -in mosquitto.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out mosquitto.crt -days 365 -passin pass:1234
+
+openssl genrsa -out esp.key 2048
+openssl req -out esp.csr -key esp.key -new -subj '/CN=localhost'
+openssl x509 -req -in esp.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out esp.crt -days 365 -passin pass:1234
+```
+
+## PlatformIO upload:
+`platformio run -e esp32dev -t upload`
+
+After first flash:
+`platformio run -e esp32ota -t upload`
 
 ## Troubleshooting notes (learned the hard way)
 
