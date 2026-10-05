@@ -79,8 +79,7 @@ char topic_ap[48];
 char topic_am[48];
 char clientId[24];
 
-// Non-blocking
-void connectToWifi()
+bool connectToWifi(uint32_t timeoutMs = 15000)
 {
   WiFi.mode(WIFI_STA);
   WiFi.setTxPower(WIFI_POWER_2dBm);
@@ -88,6 +87,19 @@ void connectToWifi()
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to SSID: ");
   Serial.println(WIFI_SSID);
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    if (millis() - start > timeoutMs)
+    {
+      Serial.println("\nWiFi connect FAILED (timeout)");
+      return false;
+    }
+    delay(500);
+    Serial.print('.');
+  }
+  Serial.printf("\nConnected, IP: %s, RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+  return true;
 }
 
 bool setupTime()
@@ -206,38 +218,35 @@ void setup()
   digitalWrite(PIN_LED_BUILTIN, false);
 
   // Unique client_id and topic per board
-  snprintf(clientId, sizeof(clientId), "%s-%02X%02X%02X%02X%02X%02X",
-          MQTT_CLIENT_NAME,
-          WiFi.macAddress()[0], WiFi.macAddress()[1],
-          WiFi.macAddress()[2], WiFi.macAddress()[3],
-          WiFi.macAddress()[4], WiFi.macAddress()[5]);
-  snprintf(topic_ap, sizeof(topic_ap), "%s/%02X%02X%02X%02X%02X%02X/kwh_ap",
-           MQTT_CLIENT_TOPIC,
-           WiFi.macAddress()[0], WiFi.macAddress()[1],
-           WiFi.macAddress()[2], WiFi.macAddress()[3],
-           WiFi.macAddress()[4], WiFi.macAddress()[5]);
-  snprintf(topic_am, sizeof(topic_am), "%s/%02X%02X%02X%02X%02X%02X/kwh_am",
-           MQTT_CLIENT_TOPIC,
-           WiFi.macAddress()[0], WiFi.macAddress()[1],
-           WiFi.macAddress()[2], WiFi.macAddress()[3],
-           WiFi.macAddress()[4], WiFi.macAddress()[5]);
+  String mac = WiFi.macAddress();
+  snprintf(clientId, sizeof(clientId), "%s-%s", MQTT_CLIENT_NAME, mac.c_str());
+  snprintf(topic_ap, sizeof(topic_ap), "%s/%s/kwh_ap", MQTT_CLIENT_TOPIC, mac.c_str());
+  snprintf(topic_am, sizeof(topic_am), "%s/%s/kwh_am", MQTT_CLIENT_TOPIC, mac.c_str());
 
-  // MQTT Settings
+  // MQTT Settings, can be set before anything else
   mqtt.setBufferSize(512);
   mqtt.setSocketTimeout(15);
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setKeepAlive(60);
-
-  // Verify with the MQTT broker
-  // tlsClient.setCACert(MQTT_CA_CERT);
-  // tlsClient.setCertificate(ESP32_CA_CERT);
-  // tlsClient.setPrivateKey(ESP32_RSA_KEY);
-  tlsClient.setInsecure();
-  tlsClient.setHandshakeTimeout(30);
-  connectToWifi();
+  // 1. Connect wifi
+  bool wifiOk = connectToWifi();
+  // 2. Setup OTA
   otaInit(clientId);
-  // Sync time with time server
-  setupTime();
+  // 3. Sync time with time server, if OK use Cert, if FAIL use INSECURE
+  if (wifiOk && setupTime())
+  {
+    // Verify with the MQTT broker
+    tlsClient.setCACert(MQTT_CA_CERT);
+    tlsClient.setHandshakeTimeout(30);
+    tlsClient.setCertificate(ESP32_CA_CERT);
+    tlsClient.setPrivateKey(ESP32_RSA_KEY);
+  }
+  else
+  {
+    // Proceed regardless
+    tlsClient.setInsecure();
+  }
+  // 4. Loop method will connect MQTT...
 } // setup
 
 void loop()
