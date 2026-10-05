@@ -11,3 +11,4 @@ npm-debug.log
 
 *conf.h
 *secrets.h
+*.old

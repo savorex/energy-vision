@@ -4,12 +4,14 @@ services:
     container_name: ${APP_NAME:-savorex-energy}-app
     restart: unless-stopped
     ports:
-      - "6767:80"
+      - "127.0.0.1:6767:80"
     depends_on:
       - backend
   backend:
     container_name: ${APP_NAME:-savorex-energy}-api
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -34,29 +36,27 @@ services:
       MYSQL_USER: ${DB_USER}
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./db:/docker-entrypoint-initdb.d:ro
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -prootpass"]
       interval: 10s
       timeout: 5s
       retries: 5
-  mqtt:
-    image: eclipse-mosquitto:2
-    container_name: mqtt-broker
-    ports:
-      - "8883:8883"
-    volumes:
-      - ./mqtt/config:/mosquitto/config
-      - ./mqtt/data:/mosquitto/data
-      - ./mqtt/log:/mosquitto/log
-    restart: unless-stopped
-  mqttsub:
-    image: eclipse-mosquitto:2
-    container_name: mqtt-sub
-    restart: unless-stopped
-    depends_on:
-      - mqtt
-    command: mosquitto_sub -h mqtt -t "sensor/temperature"
+  # mqttsub:
+    # build: node:22-alpine
+    # restart: unless-stopped
+    # depends_on: [db, mqttbroker]
+    # environment:
+      # DB_HOST: db
+      # DB_USER: energy_app
+      # DB_PASSWORD: change-me-too
+      # DB_NAME: energy
+      # MQTT_URL: mqtts://mqttbroker:8883
+      # MQTT_USER: your-username
+      # MQTT_PASS: your-password
+      # MQTT_CA: /certs/ca.pem
+    # volumes:
+      # - ./mqtt/certs:/certs:ro
 
 volumes:
   mysql-data:

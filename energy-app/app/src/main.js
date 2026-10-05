@@ -1,8 +1,19 @@
-function setInfoCards(yearly_kwh_total) {
-  const val0 = Math.round(yearly_kwh_total);
-  const val1 = Math.round(yearly_kwh_total / 12);
-  const val2 = Math.round(yearly_kwh_total / 365.25);
-  const val3 = Math.round(yearly_kwh_total / 365.25 / 24);
+function setInfoCards(total_kwh) {
+  // Range-aware: totals cover the selected date range, not a fixed year
+  const s = new Date(document.getElementById("dateStart").value);
+  const e = new Date(document.getElementById("dateEnd").value);
+  let days = 365.25;
+  if (!isNaN(s) && !isNaN(e) && e >= s) {
+    days = Math.max(1, (e - s) / 86400000 + 1);
+  }
+  const perDay = total_kwh / days;
+  const perYear = perDay * 365.25;
+
+  const val0 = Math.round(perYear);
+  const val1 = Math.round(perYear / 12);
+  const val2 = Math.round(perDay);
+  const val3 = Math.round(perDay / 24);
+
   document.getElementsByClassName("info-cards")[0].children[0].getElementsByClassName("val")[0].textContent = `${val0}`;
   document.getElementsByClassName("info-cards")[0].children[1].getElementsByClassName("val")[0].textContent = `${val1}`;
   document.getElementsByClassName("info-cards")[0].children[2].getElementsByClassName("val")[0].textContent = `${val2}`;
@@ -10,21 +21,22 @@ function setInfoCards(yearly_kwh_total) {
 }
 
 (function () {
-  var YEAR_MIN = 2024, YEAR_MAX = 2026;
-
   var wrap = document.getElementById('sliderWrap');
   var track = document.getElementById('sliderTrack');
   var fill = document.getElementById('sliderFill');
   var hStart = document.getElementById('handleStart');
   var hEnd = document.getElementById('handleEnd');
   var ticks = document.getElementById('tickLabels');
-
   var dateStart = document.getElementById('dateStart');
   var dateEnd = document.getElementById('dateEnd');
   var yearSelector = document.getElementById('yearSelector');
 
-  // Two months shown across the slider for the selected year
-  var state = { year: 2024, start: 0, end: 0.4 }; // start/end as 0..1 of the year
+  var currentYear = new Date().getFullYear();
+  var state = {
+    year: currentYear,
+    start: 0,      // Jan 1 of current year
+    end: dateToFrac(new Date()),   // today
+  };
 
   function toFraction(evt) {
     var rect = track.getBoundingClientRect();
@@ -52,6 +64,7 @@ function setInfoCards(yearly_kwh_total) {
   }
 
   function fractionToDate(frac, year) {
+    if (frac >= 1) return new Date(year, 11, 31, 23, 59, 59);
     var start = new Date(year, 0, 1).getTime();
     var end = new Date(year + 1, 0, 1).getTime();
     return new Date(start + frac * (end - start));
@@ -91,13 +104,21 @@ function setInfoCards(yearly_kwh_total) {
     return hEnd;
   }
 
+  function maxFrac() {
+    var now = new Date();
+    if (state.year !== now.getFullYear()) return 1;
+    return dateToFrac(now);
+  }
+
   function applyDrag(frac) {
     var minGap = 0.01;
+    var maxF = maxFrac();
     if (activeHandle === hStart) {
       state.start = Math.min(frac, state.end - minGap);
     } else {
       state.end = Math.max(frac, state.start + minGap);
     }
+    if (state.end > maxF) state.end = maxF;
     render();
   }
 
@@ -119,20 +140,21 @@ function setInfoCards(yearly_kwh_total) {
     activeHandle = null;
     document.removeEventListener('pointermove', onPointerMove);
     document.removeEventListener('pointerup', onPointerUp);
+    scheduleUpdate();
   }
 
   wrap.addEventListener('pointerdown', onPointerDown);
 
-  // Keyboard support for handles
   function keyStep(handle, delta) {
     if (handle === hStart) {
       state.start = Math.min(1, Math.max(0, state.start + delta));
       if (state.start > state.end - 0.01) state.start = state.end - 0.01;
     } else {
-      state.end = Math.min(1, Math.max(0, state.end + delta));
+      state.end = Math.min(maxFrac(), Math.max(0, state.end + delta));
       if (state.end < state.start + 0.01) state.end = state.start + 0.01;
     }
     render();
+    scheduleUpdate();
   }
 
   [hStart, hEnd].forEach(function (handle) {
@@ -143,7 +165,6 @@ function setInfoCards(yearly_kwh_total) {
     });
   });
 
-  // --- Year selector: switch view to the chosen year ---
   yearSelector.addEventListener('click', function (e) {
     var btn = e.target.closest('.year-btn');
     if (!btn) return;
@@ -152,16 +173,11 @@ function setInfoCards(yearly_kwh_total) {
     });
     btn.classList.add('active');
     state.year = parseInt(btn.dataset.year, 10);
-
-    // Reset the range to the full year and sync date inputs
     state.start = 0;
-    state.end = 1;
+    state.end = maxFrac();
     render();
-    dateStart.value = state.year + '-01-01';
-    dateEnd.value = state.year + '-12-31';
-    render();
-
     scrollToActiveYear();
+    scheduleUpdate();
   });
 
   // Keep the active year visible in the scrollable selector
@@ -174,14 +190,28 @@ function setInfoCards(yearly_kwh_total) {
   function syncFromDates() {
     var s = new Date(dateStart.value);
     var f = new Date(dateEnd.value);
+    var maxF = maxFrac();
     if (!isNaN(s) && s.getFullYear() === state.year) state.start = dateToFrac(s);
-    if (!isNaN(f) && f.getFullYear() === state.year) state.end = dateToFrac(f);
-    if (state.end - state.start < 0.01) state.end = Math.min(1, state.start + 0.01);
+    if (!isNaN(f) && f.getFullYear() === state.year) state.end = Math.min(dateToFrac(f), maxF);
+    if (state.end - state.start < 0.01) state.end = Math.min(maxF, state.start + 0.01);
     render();
+  }
+
+  // Debounced refetch whenever the date range changes
+  var dateDebounce = null;
+  function scheduleUpdate() {
+    clearTimeout(dateDebounce);
+    dateDebounce = setTimeout(updateDiagrams, 250);
   }
 
   dateStart.addEventListener('change', syncFromDates);
   dateEnd.addEventListener('change', syncFromDates);
+  dateStart.addEventListener('change', scheduleUpdate);
+  dateEnd.addEventListener('change', scheduleUpdate);
+
+  yearSelector.querySelectorAll('.year-btn').forEach(function (b) {
+    if (parseInt(b.dataset.year, 10) === currentYear) b.classList.add('active');
+  });
 
   // Initial render
   render();
@@ -200,107 +230,6 @@ var selected_sankey_type = 0;
 const color_default = "#424480";
 const color_hover = "#9c9b76";
 const color_disabled = "#777891";
-
-const savorex_json =
-  [
-    // graph_mkl_demo //
-    // 2024
-    // ...
-    // 2025
-    // ...
-    // 2026:
-    {
-      name: "Demo",
-      total_kwh_mkl: 1474627 * 1.851851852 * 1.78,
-      nodes: [
-        { name: "Mikkelin Kampus" },                                    // Muuntamo
-        { name: "PK" },                                                 // PK
-        { name: "PK1" },                                                // PK1
-        { name: "Mikpoli" },                                            // Mikpoli
-        { name: "A-rakennus LNK1P" },
-        { name: "B-rakennus" },
-        { name: "D-rakennus JKD1" },
-        { name: "D-rakennus LNK1N" },
-        { name: "D-rakennus jäähdytys, IJK" },
-        { name: "D:n keittiö" },
-        { name: "F-rakennus" },
-        { name: "X-rakennus" },
-        { name: "Autolämmitykset" },
-        { name: "KJK1" },
-        { name: "PK10" },                                               // PK10
-        { name: "E-rakennus" },
-        { name: "E-rakennus ERK002" },
-        { name: "E-rakennus ERK201" },
-        { name: "E-rakennus ERK302" },
-        { name: "E-rakennus ERK401" },
-        { name: "E-rakennus ERK205" },
-        { name: "E-rakennus ERK303" },
-        { name: "E-rakennus ERK001 ja 101 sekä JKE0.1-0.4" },
-        { name: "C-rakennus NK1" },
-        { name: "D-rakennus DNK1" },
-        { name: "Autolämmitys PR-keskus" },
-        { name: "H+K-rakennukset" },                                    // H-K-rakennukset
-        { name: "K-rakennus" },
-        { name: "H-rakennus" },
-        { name: "Muut" },                                               // PK10 muut
-        { name: "Mikpoli" },                                               // PK Mikpoli
-        { name: "M-rakennus" },
-        { name: "T-rakennus" },
-        { name: "Muut" }                                                // Mikpoli muut
-      ],
-      links: [
-        { source: 0, target: 1, value: 1474627 * 1.851851852 * 1.78 },                       // OSTO => PK
-        { source: 1, target: 2, value: 1474627 * 1.851851852 * 1.78 * 0.8 },                       // PK => PK1 80%
-        { source: 2, target: 4, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => A-rakennus LNK1P
-        { source: 2, target: 5, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => B-rakennus
-        { source: 2, target: 6, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => D-rakennus JKD1
-        { source: 2, target: 7, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => D-rakennus LNK1N
-        { source: 2, target: 8, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => D-rakennus jäähdytys, IJK
-        { source: 2, target: 9, value: 1474627 * 1.851851852 * 0.1 },                   // PK1 => D:n keittiö
-        { source: 2, target: 10, value: 1474627 * 1.851851852 * 0.1 },                  // PK1 => F-rakennus
-        { source: 2, target: 11, value: 1474627 * 1.851851852 * 0.1 },                  // PK1 => X-rakennus
-        { source: 2, target: 12, value: 1474627 * 1.851851852 * 0.1 },                  // PK1 => Autolämmitys
-        { source: 2, target: 13, value: 1474627 * 1.851851852 * 0.1 },                  // PK1 => KJK1
-        { source: 2, target: 14, value: 1474627 },                                      // PK1 => PK10
-        { source: 14, target: 15, value: 1474627 * 0.4 },                               // PK10 => E-rakennus
-        { source: 15, target: 16, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK002
-        { source: 15, target: 17, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK201
-        { source: 15, target: 18, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK302
-        { source: 15, target: 19, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK401
-        { source: 15, target: 20, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK205
-        { source: 15, target: 21, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK303
-        { source: 15, target: 22, value: 1474627 * 0.4 * 0.1429 },                      // E-rakennus => E-rakennus ERK001 ja 101 sekä JKE0.1-0.4
-        { source: 14, target: 23, value: 1474627 * 0.36 * 0.35 },                       // PK10 => C-rakennus NK1
-        { source: 14, target: 24, value: 1474627 * 0.36 * 0.15 },                       // PK10 => D-rakennus DNK1
-        { source: 14, target: 25, value: 1474627 * 0.36 * 0.1 },                        // PK10 => Autolämmitys PR-keskus
-        { source: 14, target: 26, value: 1474627 * 0.36 * 0.5 },                        // PK10 => H-K-rakennukset
-        { source: 26, target: 27, value: 1474627 * 0.36 * 0.5 * 0.7 },                  // H-K-rakennukset => K-rakennus
-        { source: 26, target: 28, value: 1474627 * 0.36 * 0.5 * 0.3 },                  // H-K-rakennukset => H-rakennus
-        { source: 14, target: 29, value: 1474627 * 0.02 },                              // PK10 muut
-        { source: 1, target: 3, value: 1474627 * 1.851851852 * 1.78 * 0.2 },                       // PK => Mikpoli 20%
-        { source: 3, target: 4, value: 1474627 * 1.851851852 * 1.78 * 0.2 },
-        { source: 4, target: 30, value: 1474627 * 1.851851852 * 1.78 * 0.2 * 0.6 },    // Mikpoli => M-rakennus 60%
-        { source: 4, target: 31, value: 1474627 * 1.851851852 * 1.78 * 0.2 * 0.3 },    // Mikpoli => T-rakennus 30%
-        { source: 4, target: 32, value: 1474627 * 1.851851852 * 1.78 * 0.2 * 0.1 }     // Mikpoli => muut 10%
-      ]
-    },
-    // graph_mkl_reaali //
-    {
-      name: "Reaali",
-      total_kwh_mkl: 16220897,
-      nodes: [
-        { name: "Mikkelin Kampus" },
-        { name: "PK" },
-        { name: "E-Rakennus (PK10)" },
-        { name: "Muu kampus" }
-      ],
-      links: [
-        { source: 0, target: 1, value: 16220897 },
-        { source: 1, target: 2, value: 1474627 },
-        { source: 1, target: 3, value: 16220897 - 1474627 }
-      ]
-    }
-  ];
 
 function drawSankey(container, graph, offsetY, totalValue) {
   const sankey = d3.sankey()
@@ -324,7 +253,7 @@ function drawSankey(container, graph, offsetY, totalValue) {
     .style("font-size", "18px")
     .style("font-weight", "700")
     .style("fill", "#e6e9f2")
-    .text("XAMK Energy");
+    .text("XAMK Energy - " + graph.name);
 
   function pct(v) {
     return ((v / totalValue) * 100).toFixed(1) + "%";
@@ -398,27 +327,80 @@ function drawSankey(container, graph, offsetY, totalValue) {
   });
 }
 
-function drawDemoGraph() {
-  const data = savorex_json[0];
-  drawSankey(svg, data, 0, data.total_kwh_mkl);
-  setInfoCards(data.total_kwh_mkl);
+// ---------- AJAX data loading ----------
+const API_BASE = "/xamk-energy";
+const API_FULL = API_BASE + "/api/data-full";
+const API_REAL = API_BASE + "/api/data-real";
+
+function activeApi() {
+  return selected_sankey_type === 0 ? API_FULL : API_REAL;
 }
 
-function drawReaaliGraph() {
-  const data = savorex_json[1];
-  drawSankey(svg, data, 0, data.total_kwh_mkl);
-  setInfoCards(data.total_kwh_mkl);
+function buildQuery() {
+  const startDate = document.getElementById("dateStart")?.value || "2024-01-01";
+  const endDate = document.getElementById("dateEnd")?.value
+    || new Date().toISOString().slice(0, 10);
+  return `?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+}
+
+async function loadSankeyData(signal, attempt = 0) {
+  try {
+    const res = await fetch(activeApi() + buildQuery(), { signal });
+    if (!res.ok) {
+      let msg = res.status;
+      try { msg = (await res.json()).error || msg; } catch { }
+      throw new Error(`API error: ${msg}`);
+    }
+    return res.json();
+  } catch (err) {
+    if (err.name === "AbortError" || attempt >= 2) throw err;
+    await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+    return loadSankeyData(signal, attempt + 1);
+  }
+}
+
+let currentAbort = null;   // avoid overlapping renders on rapid clicks
+
+async function drawCurrentGraph() {
+  if (currentAbort) currentAbort.abort();
+  currentAbort = new AbortController();
+
+  d3.select("svg").attr("fill-opacity", 0.3);   // dim while loading
+
+  try {
+    const data = await loadSankeyData(currentAbort.signal);
+    // /api/data returns Sankey-ready: { name, total_kwh, nodes: [names], links: [{source,target,value}] }
+    const shaped = {
+      name: data.name,
+      total_kwh_mkl: data.total_kwh,
+      nodes: (data.nodes || []).map(name => ({ name })),
+      links: data.links || [],
+    };
+    if (shaped.nodes.length === 0 || shaped.links.length === 0) {
+      throw new Error("empty dataset for this date range");
+    }
+    drawSankey(svg, shaped, 0, shaped.total_kwh_mkl);
+    setInfoCards(shaped.total_kwh_mkl);
+  } catch (err) {
+    if (err.name === "AbortError") return;
+    console.error(err);
+    d3.select("svg").selectAll("*").remove();
+    d3.select("svg").attr("width", width).attr("height", height);
+    d3.select("svg").append("text")
+      .attr("x", width / 2).attr("y", height / 2)
+      .attr("text-anchor", "middle")
+      .style("fill", "#e6e9f2")
+      .text("Data load failed: " + err.message);
+  } finally {
+    d3.select("svg").attr("fill-opacity", 1);
+  }
 }
 
 function updateDiagrams() {
   width = window.innerWidth * 0.9;
   d3.select("svg").selectAll("*").remove();
   d3.select("svg").attr("width", width).attr("height", height);
-  if (selected_sankey_type == 0) {
-    drawDemoGraph();
-  } else {
-    drawReaaliGraph();
-  }
+  drawCurrentGraph();
 }
 
 // Control panel
@@ -428,11 +410,7 @@ document.querySelectorAll(".button-row").forEach(row => {
     if (!btn || btn.disabled) return;
     row.querySelectorAll(".option").forEach(b => b.removeAttribute("data-active"));
     btn.setAttribute("data-active", "");
-    if (btn.textContent == "Demo") {
-      selected_sankey_type = 0;
-    } else {
-      selected_sankey_type = 1;
-    }
+    selected_sankey_type = btn.textContent === "Demo" ? 0 : 1;
     updateDiagrams();
   });
 });
@@ -473,6 +451,18 @@ document.querySelectorAll(".time-input").forEach((input) => {
     input.value =
       String(h).padStart(2, "0") + ":" + String(min).padStart(2, "0");
   });
+
+  // debounce refetch when the time changes
+  let debounce = null;
+  input.addEventListener("change", () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(updateDiagrams, 250);
+  });
+});
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const api = selected_sankey_type === 1 ? API_FULL : API_REAL;
+  window.location = api.replace(/\/api\/.+$/, "") + "/api/export/measurements" + buildQuery();
 });
 
 window.onresize = updateDiagrams;

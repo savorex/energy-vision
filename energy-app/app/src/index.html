@@ -77,7 +77,7 @@
 
             <!-- Scrollable year switcher -->
             <div class="year-selector" id="yearSelector" aria-label="Valitse vuosi">
-              <button class="year-btn active" data-year="2024">2024</button>
+              <button class="year-btn" data-year="2024">2024</button>
               <button class="year-btn" data-year="2025">2025</button>
               <button class="year-btn" data-year="2026">2026</button>
             </div>
@@ -93,8 +93,7 @@
           <input id="dateEnd" type="date" value="2027-01-01" />
           <input type="text" class="time-input" pattern="([01]\d|2[0-3]):[0-5]\d" placeholder="00:00" maxlength="5" />
 
-          <a class="download" href="export_010226_030426.csv" download="kwh_data_010226_030426.csv" target="_blank"
-            rel="noopener noreferrer">Lataa .csv</a>
+          <a class="download" id="exportBtn" rel="noopener noreferrer">Lataa .csv</a>
         </div>
       </div>
 

@@ -15,7 +15,9 @@ energy-app/
         package.json
         server.js
     db/
-        init.sql
+        01-init.sql
+        02-meters.sql
+        03-measurements.sql
     docker-compose.yml
 ```
 
@@ -43,11 +45,13 @@ Note: you can set the name of the application yourself. Change `energy-vision` t
 `sudo rm /etc/nginx/sites-enabled/energy-vision`
 `sudo systemctl reload nginx`
 
-### one-off: apply the new table to the running DB
-`sudo docker exec -i energy-vision-db mysql -usankey -psankeypass sankeydb < db/init/02-chart-info.sql`
+### one-off: apply SQL files into the running DB
+`sudo docker exec -i energy-vision-db mysql -usankey -psankeypass < db/init/01-init.sql`
+`sudo docker exec -i energy-vision-db mysql -usankey -psankeypass sankeydb < db/init/02-meters.sql`
+`sudo docker exec -i energy-vision-db mysql -usankey -psankeypass sankeydb < db/init/03-measurements.sql`
 
 
-If you already started the DB once, changing init.sql will do nothing unless you remove the volume:
+If you already started the DB once, changing `01-init.sql` will do nothing unless you remove the volume:
 ```
 sudo docker compose down -v
 sudo docker compose up
