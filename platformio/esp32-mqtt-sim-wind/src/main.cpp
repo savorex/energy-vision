@@ -29,17 +29,21 @@
 uint8_t wifi_status = 0;
 
 float energyKwh = 0.0f;
+float energyTotalkWh = 0.0f;
 uint32_t lastPublish = 0;
 
-const char *TOPIC = TOPIC_PREFIX "/telemetry";
-const char *STAT = TOPIC_PREFIX "/status";
+char DEVICE_MAC[18];
+char TOPIC[48];
+char STAT[48];
 
 WiFiClientSecure tlsClient;
 PubSubClient client(tlsClient);
 
-constexpr uint8_t PIN_MODE_LED = 2;
-constexpr uint8_t PIN_BTN_CALM = 32;
-constexpr uint8_t PIN_BTN_NORMAL = 33;
+constexpr uint8_t PIN_MODE_LED = 32;
+constexpr uint8_t PIN_MODE_LED2 = 16;
+
+constexpr uint8_t PIN_BTN_CALM = 33;
+constexpr uint8_t PIN_BTN_NORMAL = 26;
 constexpr uint8_t PIN_BTN_WINDY = 27;
 
 enum class Wind : uint8_t
@@ -49,36 +53,6 @@ enum class Wind : uint8_t
   WINDY = 2
 };
 Wind wind = Wind::NORMAL;
-
-struct Button
-{
-  uint8_t pin;
-  bool last = HIGH;
-  bool stable = HIGH;
-  uint32_t lastChange = 0;
-};
-
-Button btnCalm, btnNormal, btnWindy;
-
-bool update(Button &b)
-{
-  bool now = digitalRead(b.pin);
-  bool hit = false;
-  if (now != b.last)
-  {
-    b.last = now;
-    b.lastChange = millis();
-  }
-  if (millis() - b.lastChange > 50)
-  {
-    if (now == LOW && b.stable == HIGH)
-    {
-      hit = true;
-    }
-    b.stable = now;
-  }
-  return hit;
-}
 
 const char *modeName(Wind w)
 {
@@ -182,8 +156,8 @@ void sendTelemetry(float dtSec)
   float rpm = fminf(v * 26.0f, 40.0f); // roughly proportional to wind
   float temp = 18.0f + 12.0f * (kw / 3.0f);
   bool overSpeed = v > 25.0f;
-
   energyKwh += kw * dtSec / 3600.0f;
+  energyTotalkWh += kw * dtSec;
 
   char buf[384];
   snprintf(buf, sizeof(buf),
@@ -197,9 +171,13 @@ void sendTelemetry(float dtSec)
     50.0f + (random(-8, 8) / 100.0f), temp,
     overSpeed ? "true" : "false", energyKwh);
 
-  bool ok = client.publish(TOPIC, buf, false);
-  Serial.printf("[%02d:%02d:%02d] %s v=%.1f m/s P=%.0f W %s\n",
-    ti.tm_hour, ti.tm_min, ti.tm_sec, buf + 1, v, kw * 1000.0f,
+  char topic[48];
+  snprintf(topic, sizeof(topic), "%s/%s/kwh_acc", TOPIC_PREFIX, DEVICE_MAC);
+  char msg[24];
+  snprintf(msg, sizeof(msg), "%.3f", energyTotalkWh);
+  bool ok = client.publish(topic, msg, false);
+  Serial.printf("[%02d:%02d:%02d] %s pv=%.2f kW ac=%.2f kW %s\n",
+    ti.tm_hour, ti.tm_min, ti.tm_sec, buf + 1, energyTotalkWh, kw,
     ok ? "published" : "PUBLISH FAILED");
 }
 
@@ -209,9 +187,9 @@ void connect()
   {
     while (!client.connected())
     {
-      Serial.printf("[mqtt] connecting to %s:%d (TLS)...", SERVER, MQTT_PORT);
+      Serial.printf("[mqtt] connecting to %s:%d (TLS)...", MQTT_SERVER, MQTT_PORT);
       // LWT: if the device drops, the broker publishes offline (retained)
-      bool ok = client.connect(DEVICE_ID, TOKEN, NULL, STAT, 0, true, "offline");
+      bool ok = client.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD, STAT, 0, true, "offline");
       Serial.println(ok ? " ok" : " failed, retrying in 3 s");
       if (!ok)
       {
@@ -219,7 +197,7 @@ void connect()
       }
     }
   }
-  otaInit();
+  otaInit("SolarSim-A53455G");
   if (wifi_status == 2)
   {
     client.publish(STAT, "online", true); // retained
@@ -229,10 +207,19 @@ void connect()
 void setup()
 {
   Serial.begin(115200);
-  pinMode(PIN_BTN_CALM, INPUT_PULLUP);
-  pinMode(PIN_BTN_NORMAL, INPUT_PULLUP);
-  pinMode(PIN_BTN_WINDY, INPUT_PULLUP);
+  pinMode(PIN_BTN_CALM, INPUT);
+  pinMode(PIN_BTN_NORMAL, INPUT);
+  pinMode(PIN_BTN_WINDY, INPUT);
   pinMode(PIN_MODE_LED, OUTPUT);
+  pinMode(PIN_MODE_LED2, OUTPUT);
+
+  uint64_t m = ESP.getEfuseMac(); // ESP32; use WiFi.macAddress() after WiFi.begin()
+  snprintf(DEVICE_MAC, sizeof(DEVICE_MAC), "%02X%02X%02X%02X%02X%02X",
+    (uint8_t)(m >> 40), (uint8_t)(m >> 32), (uint8_t)(m >> 24),
+    (uint8_t)(m >> 16), (uint8_t)(m >> 8), (uint8_t)m);
+
+  snprintf(TOPIC, sizeof(TOPIC), "%s/%s/telemetry", TOPIC_PREFIX, DEVICE_MAC);
+  snprintf(STAT, sizeof(STAT), "%s/%s/status", TOPIC_PREFIX, DEVICE_MAC);
 
   randomSeed(esp_random());
 
@@ -253,7 +240,7 @@ void setup()
     //   tlsClient.setCACert(ROOT_CA);
     tlsClient.setInsecure();
     tlsClient.setHandshakeTimeout(30);
-    client.setServer(SERVER, MQTT_PORT);
+    client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setBufferSize(512);
     client.setKeepAlive(30);
     client.setSocketTimeout(10);
@@ -275,23 +262,26 @@ void loop()
   }
   otaLoop();
 
-  if (update(btnCalm))
-    selectMode(Wind::CALM);
-  if (update(btnNormal))
-    selectMode(Wind::NORMAL);
-  if (update(btnWindy))
-    selectMode(Wind::WINDY);
+   // read the state of the pushbutton value:
+  uint8_t atate = digitalRead(PIN_BTN_WINDY);
+
+  // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
+  if (atate == HIGH) {
+    // turn LED on:
+    digitalWrite(PIN_MODE_LED2, HIGH);
+  } else {
+    // turn LED off:
+    digitalWrite(PIN_MODE_LED2, LOW);
+  }
 
   // LED: 1 blink / 2 s calm, steady dim normal, fast blink windy
-  {
-    uint32_t t = millis() % 2000;
-    bool on = (wind == Wind::WINDY)
-      ? (t < 150)
-      : (wind == Wind::NORMAL)
-        ? true
-        : (t < 400);
-    digitalWrite(PIN_MODE_LED, on ? HIGH : LOW);
-  }
+  uint32_t t = millis() % 2000;
+  bool on = (wind == Wind::WINDY)
+    ? (t < 150)
+    : (wind == Wind::NORMAL)
+      ? true
+      : (t < 400);
+  digitalWrite(PIN_MODE_LED, on ? HIGH : LOW);
 
   uint32_t now = millis();
   if (now - lastPublish >= PUBLISH_INTERVAL_MS)

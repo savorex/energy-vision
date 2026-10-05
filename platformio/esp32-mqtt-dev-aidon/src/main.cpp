@@ -62,7 +62,6 @@ double energy_ap_kwh_out = 0; // A+
 double energy_am_kwh = 0;     // A-
 double energy_am_kwh_out = 0; // A-
 
-unsigned long publishInterval = 3000;
 unsigned long lastPublish = 0;
 
 const unsigned long WIFI_RETRY_MS = 2000;
@@ -323,7 +322,7 @@ void loop()
     }
   }
 
-  if (mqtt.connected() && millis() - lastPublish >= publishInterval)
+  if (mqtt.connected() && millis() - lastPublish >= MQTT_PUBLISH_INTERVAL)
   {
     lastPublish = millis();
     Serial.printf("Publishing: A+ %.3f | A- %.3f\n", energy_ap_kwh_out, energy_am_kwh_out);
