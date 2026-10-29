@@ -1,67 +1,106 @@
-SET SESSION cte_max_recursion_depth = 100000;
+SET GLOBAL event_scheduler = ON;
+SET SESSION cte_max_recursion_depth = 50000;
 
-INSERT INTO measurements
-    (measurement_time, meter_id, kwh_import, kwh_export,
-     kwh_production, kwh_consumption, source_type, status_type, measurement_type)
-WITH RECURSIVE quarters AS (
-    SELECT TIMESTAMP('2024-01-01 00:00:00') AS ts
-    UNION ALL
-    SELECT ts + INTERVAL 15 MINUTE FROM quarters
-    WHERE ts < NOW() - INTERVAL MOD(MINUTE(NOW()), 15) MINUTE
-),
-meters_seed AS (
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS sim_tick //
+
+CREATE PROCEDURE sim_tick()
+BEGIN
+  DECLARE now_floor DATETIME;
+  SET now_floor = TIMESTAMP(DATE_FORMAT(NOW(), '%Y-%m-%d %H:'));  -- top of current hour
+
+  -- Cap: 90 days of history per meter per call. Small committed transactions;
+  -- repeat CALL sim_tick(); until caught up (or let the hourly event do it).
+  INSERT INTO measurements
+      (measurement_time, meter_id, kwh_import, kwh_export,
+       kwh_production, kwh_consumption, source_type, status_type, measurement_type)
+  WITH RECURSIVE
+  starts AS (
     SELECT
-        m.meter_id,
-        CAST(SUBSTRING(m.identifier, 5) AS UNSIGNED) AS simnum,
-        (CAST(SUBSTRING(m.identifier, 5) AS UNSIGNED) * 7919) % 997 AS seed0,
+      m.meter_id,
+      (m.meter_id * 7919) % 997 AS seed0,
+      GREATEST(
+        COALESCE(
+          (SELECT MAX(x.measurement_time) FROM measurements x
+           WHERE x.meter_id = m.meter_id AND x.measurement_type = 'BN01'),
+          CASE
+            WHEN m.meter_id <= 3
+              THEN TIMESTAMP('2024-01-01 00:00:00')
+            ELSE TIMESTAMP('2026-01-01 00:00:00')
+                 + INTERVAL ((m.meter_id - 3) * 37) % 220 DAY
+          END
+        ),
         CASE
-          WHEN CAST(SUBSTRING(m.identifier, 5) AS UNSIGNED) <= 22
+          WHEN m.meter_id <= 3
             THEN TIMESTAMP('2024-01-01 00:00:00')
-          ELSE TIMESTAMP('2025-07-01 00:00:00')
-               + INTERVAL ((CAST(SUBSTRING(m.identifier, 5) AS UNSIGNED) * 37) % 4400) HOUR
-        END AS start_ts
+          ELSE TIMESTAMP('2026-01-01 00:00:00')
+               + INTERVAL ((m.meter_id - 3) * 37) % 220 DAY
+        END
+      ) AS from_ts
     FROM meters m
-    WHERE m.identifier LIKE 'sim-%'
-),
-profile AS (
+  ),
+  slots AS (
+    SELECT meter_id, seed0, from_ts, from_ts + INTERVAL 1 HOUR AS ts
+    FROM starts
+    WHERE from_ts + INTERVAL 1 HOUR <= LEAST(now_floor, from_ts + INTERVAL 2160 HOUR)  -- 90-day chunk
+    UNION ALL
+    SELECT meter_id, seed0, from_ts, ts + INTERVAL 1 HOUR
+    FROM slots
+    WHERE ts + INTERVAL 1 HOUR <= LEAST(now_floor, from_ts + INTERVAL 2160 HOUR)
+  ),
+  power AS (
     SELECT
-        q.ts,
-        ms.meter_id,
-        ms.seed0,
-        ms.start_ts,
-        CASE t.btype WHEN 'BN01' THEN 1 WHEN 'BN02' THEN 263 ELSE 523 END AS toff,
-        FLOOR(HOUR(q.ts) * 4 + MINUTE(q.ts) / 15) AS qod,
-        MONTH(q.ts) AS mo
-    FROM quarters q
-    CROSS JOIN meters_seed ms
-    CROSS JOIN (SELECT 'BN01' btype UNION ALL SELECT 'BN02' UNION ALL SELECT 'BN03') t
-    WHERE q.ts >= ms.start_ts
-),
-power AS (
+      ts, meter_id, seed0, from_ts,
+      HOUR(ts) AS hod,
+      MONTH(ts) AS mo,
+      DAYOFWEEK(ts) AS dow
+    FROM slots
+  ),
+  value AS (
     SELECT
-        ts, meter_id, seed0, toff, qod, mo,
-        CASE WHEN toff = 1 THEN 1.0 WHEN toff = 263 THEN 0.45 ELSE 1.35 END AS scale,
-        (
-          0.2 + (seed0 % 40) / 100.0
-          + CASE WHEN qod BETWEEN 24 AND 35 THEN 1.5 + (seed0 % 20) / 20.0 ELSE 0 END
-          + CASE WHEN qod BETWEEN 68 AND 83 THEN 2.2 + (seed0 % 30) / 15.0 ELSE 0 END
-          + ((seed0 * (qod * 31 + DAYOFYEAR(ts) * 7)) % 50) / 400.0
-        ) * CASE WHEN mo IN (11,12,1,2,3) THEN 1.6 ELSE 1.0 END
-        AS delta_raw
-    FROM profile
-),
-agg AS (
-    SELECT
-        ts, meter_id, toff,
-        SUM(delta_raw * scale) OVER (PARTITION BY meter_id, toff ORDER BY ts) AS kwh_cum
+      ts, meter_id, from_ts,
+      -- base load + morning/evening peaks + weekend dip + winter factor + noise
+      (
+        0.4 + (seed0 % 7) * 0.06
+        + CASE WHEN hod BETWEEN 6 AND 9   THEN 0.8 + (seed0 % 5) * 0.08 ELSE 0 END
+        + CASE WHEN hod BETWEEN 16 AND 21 THEN 1.4 + (seed0 % 9) * 0.09 ELSE 0 END
+        + CASE WHEN dow IN (1, 7) THEN -0.3 ELSE 0 END
+        + CASE WHEN mo IN (11, 12, 1, 2, 3) THEN 0.5 ELSE 0 END
+        + ((seed0 * (hod * 31 + DAYOFYEAR(ts) * 7)) % 20) / 25.0
+      ) AS kwh
     FROM power
-)
-SELECT
+  ),
+  agg AS (
+    SELECT
+      v.ts, v.meter_id, v.from_ts,
+      COALESCE(
+        (SELECT MAX(x.kwh_import) FROM measurements x
+         WHERE x.meter_id = v.meter_id AND x.measurement_type = 'BN01'
+           AND x.measurement_time <= v.from_ts), 0)
+      + SUM(v.kwh) OVER (PARTITION BY v.meter_id ORDER BY v.ts) AS kwh_cum
+    FROM value v
+  )
+  SELECT
     a.ts,
     a.meter_id,
-    ROUND(a.kwh_cum, 3),
+    ROUND(a.kwh_cum, 3),   -- cumulative register, so MAX-MIN aggregation works
     0, 0, 0,
     'sim',
     'ok',
-    CASE a.toff WHEN 1 THEN 'BN01' WHEN 263 THEN 'BN02' ELSE 'BN03' END
-FROM agg a;
+    'BN01'
+  FROM agg a;
+END //
+
+DROP EVENT IF EXISTS sim_hourly_tick //
+
+CREATE EVENT sim_hourly_tick
+ON SCHEDULE EVERY 1 HOUR
+STARTS (TIMESTAMP(DATE_FORMAT(NOW(), '%Y-%m-%d %H:')) + INTERVAL 5 MINUTE)
+DO CALL sim_tick(); //
+
+DELIMITER ;
+
+-- First chunk now. The 2024-meters need ~10 calls, the 2026-meters ~3-4;
+-- CALL sim_tick(); repeatedly until COUNT(*) plateaus.
+CALL sim_tick();

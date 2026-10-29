@@ -12,7 +12,6 @@
 
 <body>
   <main>
-    <!-- sankey-diagram -->
     <svg></svg>
 
     <section class="controls">
@@ -24,12 +23,20 @@
         </div>
       </div>
       <div class="control-group">
-        <h3>XAMK Kampus:</h3>
+        <h3>Kampus:</h3>
         <div class="button-row">
           <button class="option" data-active>Mikkeli</button>
           <button class="option" disabled>Kouvola</button>
           <button class="option" disabled>Kotka</button>
           <button class="option" disabled>Savonlinna</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <h3>Lisää simulaatio kaavioon:</h3>
+        <div class="button-row">
+          <button class="option toggle">Aurinkotuotanto</button>
+          <button class="option toggle">Tuulituotanto</button>
+          <button class="option toggle">Akusto</button>
         </div>
       </div>
       <span class="control-group info-cards">
@@ -58,7 +65,6 @@
 
         <h2 class="panel-title">Sähkönkulutuksen ajankohta:</h2>
 
-
         <div class="filters time-panel">
           <div class="time-panel-main">
 
@@ -75,7 +81,6 @@
               </div>
             </div>
 
-            <!-- Scrollable year switcher -->
             <div class="year-selector" id="yearSelector" aria-label="Valitse vuosi">
               <button class="year-btn" data-year="2024">2024</button>
               <button class="year-btn" data-year="2025">2025</button>
@@ -88,11 +93,9 @@
           <label for="dateStart">Mittauksen alku:</label>
           <input id="dateStart" type="date" value="2026-01-01" />
           <input type="text" class="time-input" pattern="([01]\d|2[0-3]):[0-5]\d" placeholder="00:00" maxlength="5" />
-
           <label for="dateEnd">Mittauksen loppu:</label>
           <input id="dateEnd" type="date" value="2027-01-01" />
           <input type="text" class="time-input" pattern="([01]\d|2[0-3]):[0-5]\d" placeholder="00:00" maxlength="5" />
-
           <a class="download" id="exportBtn" rel="noopener noreferrer">Lataa .csv</a>
         </div>
       </div>

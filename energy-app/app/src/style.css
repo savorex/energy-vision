@@ -448,7 +448,7 @@ input[type="time"] {
   flex-wrap: wrap;
   gap: inherit;
   right: -3%;
-  bottom: 29%;
+  top: 500px;
   transform: scale(0.75);
 }
 
@@ -585,6 +585,7 @@ input[type="time"] {
 @media (max-width: 1600px) {
   .control-group.info-cards {
     position: relative;
+    top: auto;
     right: 0;
     transform: scale(1);
   }

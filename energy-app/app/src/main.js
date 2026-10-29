@@ -408,8 +408,16 @@ document.querySelectorAll(".button-row").forEach(row => {
   row.addEventListener("click", e => {
     const btn = e.target.closest("button.option");
     if (!btn || btn.disabled) return;
-    row.querySelectorAll(".option").forEach(b => b.removeAttribute("data-active"));
-    btn.setAttribute("data-active", "");
+    if (btn.classList.contains("toggle")) {
+      if (btn.attributes.getNamedItem("data-active")) {
+        btn.removeAttribute("data-active");
+      } else {
+        btn.setAttribute("data-active", "");
+      }
+    } else {
+      row.querySelectorAll(".option").forEach(b => b.removeAttribute("data-active"));
+      btn.setAttribute("data-active", "");
+    }
     selected_sankey_type = btn.textContent === "Demo" ? 0 : 1;
     updateDiagrams();
   });
